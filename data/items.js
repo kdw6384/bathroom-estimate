@@ -1,0 +1,30 @@
+// 자주 쓰는 품목 카탈로그 (초기 시드 데이터).
+// "욕실견적서", "한국아파트관리동 견적서", "지역경찰교육센터 화장실 개선공사" 3개 실제 견적서를 참고해 만듦.
+// unitPrice는 자재비+시공비가 섞여 있을 수 있는 대략값 — 실제 사용 시 화면에서 자유롭게 수정 가능.
+module.exports = [
+  { id: "wall_tile", name: "벽타일", spec: "300*600", unit: "BOX", unitPrice: 25000 },
+  { id: "floor_tile", name: "바닥타일", spec: "300*300", unit: "BOX", unitPrice: 21000 },
+  { id: "tile_material_set", name: "타일부자재(본드,시멘트,압착등)", spec: "", unit: "SET", unitPrice: 200000 },
+  { id: "tile_corner_drain_set", name: "타일부자재(코너,유가)", spec: "", unit: "SET", unitPrice: 100000 },
+  { id: "toilet", name: "양변기", spec: "특대형", unit: "EA", unitPrice: 150000 },
+  { id: "sink", name: "세면기", spec: "", unit: "EA", unitPrice: 120000 },
+  { id: "urinal", name: "소변기", spec: "", unit: "EA", unitPrice: 135000 },
+  { id: "cubicle", name: "큐비클", spec: "", unit: "EA", unitPrice: 1000000 },
+  { id: "faucet_sink", name: "세면수전", spec: "BK", unit: "EA", unitPrice: 50000 },
+  { id: "faucet_shower", name: "샤워수전", spec: "BK", unit: "EA", unitPrice: 65000 },
+  { id: "faucet_shower_combo", name: "샤워겸용수전", spec: "BK", unit: "EA", unitPrice: 65000 },
+  { id: "accessory_set", name: "악세사리(제네시스)", spec: "", unit: "SET", unitPrice: 55000 },
+  { id: "mirror", name: "욕실거울", spec: "600*800", unit: "EA", unitPrice: 30000 },
+  { id: "cabinet", name: "욕실장", spec: "1200*800", unit: "EA", unitPrice: 160000 },
+  { id: "ceiling_set", name: "욕실천장(본체+날개)", spec: "", unit: "SET", unitPrice: 150000 },
+  { id: "led_light", name: "조명(LED)", spec: "6인치", unit: "EA", unitPrice: 15000 },
+  { id: "vent_fan", name: "환풍기(역류방지)", spec: "", unit: "EA", unitPrice: 45000 },
+  { id: "electric_water_heater", name: "전기 온수기", spec: "15L", unit: "조", unitPrice: 245000 },
+  { id: "misc_material", name: "잡자재비,경비", spec: "", unit: "식", unitPrice: 200000 },
+  { id: "demolition", name: "철거 및 폐기물처리", spec: "", unit: "식", unitPrice: 350000 },
+  { id: "ladder_truck", name: "사다리차", spec: "", unit: "회", unitPrice: 130000 },
+  { id: "tile_labor", name: "타일시공비", spec: "", unit: "칸", unitPrice: 450000 },
+  { id: "fixture_labor", name: "욕실용품시공비", spec: "", unit: "칸", unitPrice: 200000 },
+  { id: "ceiling_labor", name: "돔천장시공비", spec: "", unit: "칸", unitPrice: 100000 },
+  { id: "general_labor", name: "시공비(일괄)", spec: "", unit: "식", unitPrice: 1000000 },
+];
