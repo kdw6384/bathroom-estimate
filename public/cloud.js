@@ -71,9 +71,14 @@ function escapeHtmlCloud(s) {
 }
 
 async function signInWithKakao() {
+  // account_email은 카카오 쪽에서 사업자 인증이 있어야 열리는 동의항목이라
+  // 요청 자체를 빼고, 닉네임/프로필 사진만 요청한다.
   await supabaseClient.auth.signInWithOAuth({
     provider: "kakao",
-    options: { redirectTo: window.location.origin + window.location.pathname },
+    options: {
+      redirectTo: window.location.origin + window.location.pathname,
+      scopes: "profile_nickname profile_image",
+    },
   });
 }
 
