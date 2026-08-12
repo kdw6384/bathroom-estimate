@@ -39,6 +39,7 @@ const state = {
   overrides: loadJSON(OVERRIDES_KEY, {}),
   items: [], // 지금 담은 견적 항목
   vatRatePercent: 10,
+  vatMode: "exclusive", // "exclusive" = 부가세 별도, "inclusive" = 부가세 포함
   depositRatePercent: 50,
   editingItemId: null,
   editingIsCustom: false,
@@ -60,17 +61,56 @@ function saveOverrides() {
   localStorage.setItem(OVERRIDES_KEY, JSON.stringify(state.overrides));
 }
 
+// ===== 견적번호 / 유효기간 =====
+const QUOTE_SEQ_KEY = "bathroom-estimate-quote-seq";
+
+function todayYYYYMMDD(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}${m}${d}`;
+}
+
+function nextQuoteNumber() {
+  const today = todayYYYYMMDD();
+  const stored = loadJSON(QUOTE_SEQ_KEY, { date: "", seq: 0 });
+  const seq = stored.date === today ? stored.seq + 1 : 1;
+  localStorage.setItem(QUOTE_SEQ_KEY, JSON.stringify({ date: today, seq }));
+  return `Q-${today}-${String(seq).padStart(3, "0")}`;
+}
+
+function validUntilDate(daysFromNow = 15) {
+  const d = new Date();
+  d.setDate(d.getDate() + daysFromNow);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 // ===== 계산: 서버 왕복 없이 브라우저에서 즉시 =====
 function computeQuote() {
   const lineItems = state.items.map((it) => ({ ...it, amount: Math.round(it.qty * it.unitPrice) }));
-  const subtotal = lineItems.reduce((s, it) => s + it.amount, 0);
+  const rawSum = lineItems.reduce((s, it) => s + it.amount, 0);
   const vatRate = state.vatRatePercent / 100;
-  const vat = Math.round(subtotal * vatRate);
-  const total = subtotal + vat;
+
+  let subtotal, vat, total;
+  if (state.vatMode === "inclusive") {
+    // 담은 단가에 부가세가 이미 포함되어 있다고 보고 역산
+    total = rawSum;
+    subtotal = Math.round(total / (1 + vatRate));
+    vat = total - subtotal;
+  } else {
+    // 담은 단가는 부가세 별도 금액
+    subtotal = rawSum;
+    vat = Math.round(subtotal * vatRate);
+    total = subtotal + vat;
+  }
+
   const depositRate = state.depositRatePercent / 100;
   const deposit = Math.round(total * depositRate);
   const balance = total - deposit;
-  return { lineItems, subtotal, vat, vatRate, total, deposit, depositRate, balance };
+  return { lineItems, subtotal, vat, vatRate, vatMode: state.vatMode, total, deposit, depositRate, balance };
 }
 
 // ===== 화면 전체를 다시 그리는 단일 진입점 =====
@@ -348,7 +388,7 @@ function renderItemCards() {
 function renderTotals(quote) {
   const el = document.getElementById("totals");
   el.innerHTML = `
-    <div class="line"><span>합계</span><span>${won(quote.subtotal)}원</span></div>
+    <div class="line"><span>공급가액</span><span>${won(quote.subtotal)}원</span></div>
     <div class="line"><span>부가세 (${Math.round(quote.vatRate * 100)}%)</span><span>${won(quote.vat)}원</span></div>
     <div class="line grand"><span>총 합계금액</span><span>${won(quote.total)}원</span></div>
     <div class="line"><span>계약금 (${Math.round(quote.depositRate * 100)}%)</span><span>${won(quote.deposit)}원</span></div>
@@ -358,8 +398,11 @@ function renderTotals(quote) {
 
 function renderNotes() {
   const el = document.getElementById("notesArea");
+  const vatLine = state.vatMode === "inclusive"
+    ? "※ 상기 금액은 부가세가 포함된 금액입니다."
+    : "※ 상기 금액은 부가세 별도입니다.";
   el.innerHTML = [
-    "※ 상기 금액은 부가세 별도입니다.",
+    vatLine,
     `※ 계약금 ${state.depositRatePercent}%, 공사완료 후 나머지 잔금 입금.`,
     "※ 하자 보수기간은 공사종료 후 시점부터 1년간 보장함.",
     "※ 견적금액은 현장작업 상황에 따라 변동될 수 있습니다.",
@@ -413,6 +456,14 @@ document.getElementById("depositRate").addEventListener("input", (e) => {
   recalcTotalsOnly();
 });
 
+document.querySelectorAll(".vat-mode-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    state.vatMode = btn.dataset.mode;
+    document.querySelectorAll(".vat-mode-btn").forEach((b) => b.classList.toggle("active", b === btn));
+    recalcTotalsOnly();
+  });
+});
+
 document.getElementById("downloadBtn").addEventListener("click", async () => {
   const validItems = state.items.filter((r) => r.name && r.qty > 0);
   if (validItems.length === 0) {
@@ -424,11 +475,14 @@ document.getElementById("downloadBtn").addEventListener("click", async () => {
     supplierRep: document.getElementById("supplierRep").value,
     supplierContact: document.getElementById("supplierContact").value,
     supplierAccount: document.getElementById("supplierAccount").value,
+    supplierBizRegNo: document.getElementById("supplierBizRegNo").value,
     clientName: document.getElementById("clientName").value,
     contact: document.getElementById("contact").value,
     siteAddress: document.getElementById("siteAddress").value,
     consultDate: document.getElementById("consultDate").value,
     workDate: document.getElementById("workDate").value,
+    quoteNumber: nextQuoteNumber(),
+    validUntil: validUntilDate(15),
   };
   const res = await fetch("/api/quote/xlsx", {
     method: "POST",
@@ -436,6 +490,7 @@ document.getElementById("downloadBtn").addEventListener("click", async () => {
     body: JSON.stringify({
       items: validItems,
       vatRate: state.vatRatePercent / 100,
+      vatMode: state.vatMode,
       depositRate: state.depositRatePercent / 100,
       meta,
     }),

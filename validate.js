@@ -1,8 +1,12 @@
 // 클라이언트(app.js)의 LIMITS와 반드시 같은 값을 유지할 것
 const LIMITS = { qtyMax: 9999, priceMax: 100000000, rateMax: 100 };
 
-function validateQuoteInput({ items, vatRate, depositRate }) {
+function validateQuoteInput({ items, vatRate, depositRate, vatMode }) {
   const errors = [];
+
+  if (vatMode !== undefined && vatMode !== "exclusive" && vatMode !== "inclusive") {
+    errors.push("부가세 방식이 올바르지 않습니다. (별도 또는 포함)");
+  }
 
   if (!Array.isArray(items) || items.length === 0) {
     errors.push("담은 품목이 없습니다.");

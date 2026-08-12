@@ -46,12 +46,15 @@ async function buildQuoteWorkbook({ meta, quote }) {
     ["대표자", meta.supplierRep],
     ["연락처", meta.supplierContact],
     ["입금계좌", meta.supplierAccount],
+    ["사업자등록번호", meta.supplierBizRegNo],
   ];
   const clientLines = [
     ["거래처명", meta.clientName],
     ["연락처", meta.contact],
     ["현장주소", meta.siteAddress],
     ["상담일자 / 시공예정일", [meta.consultDate, meta.workDate].filter(Boolean).join(" / ")],
+    ["견적번호", meta.quoteNumber],
+    ["유효기간", meta.validUntil ? `${meta.validUntil}까지` : ""],
   ];
 
   const writeInfoBlock = (title, lines, colLabel, colValueStart, colValueEnd) => {
@@ -104,6 +107,7 @@ async function buildQuoteWorkbook({ meta, quote }) {
   ws.getRow(headerRow).height = 20;
   r += 1;
 
+  const firstItemRow = r;
   quote.lineItems.forEach((it, idx) => {
     if (idx % 2 === 1) {
       for (let c = 1; c <= 7; c++) {
@@ -118,7 +122,8 @@ async function buildQuoteWorkbook({ meta, quote }) {
     ws.getCell(r, 5).value = it.unitPrice;
     ws.getCell(r, 5).numFmt = "#,##0";
     ws.getCell(r, 5).alignment = { horizontal: "right" };
-    ws.getCell(r, 6).value = it.amount;
+    // 금액 = 수량(D) * 단가(E) — 값이 아니라 수식으로 넣어서 나중에 단가를 고치면 자동 반영되게 함
+    ws.getCell(r, 6).value = { formula: `D${r}*E${r}`, result: it.amount };
     ws.getCell(r, 6).numFmt = "#,##0";
     ws.getCell(r, 6).alignment = { horizontal: "right" };
     ws.getCell(r, 7).value = it.note || "";
@@ -127,39 +132,55 @@ async function buildQuoteWorkbook({ meta, quote }) {
     }
     r += 1;
   });
+  const lastItemRow = r - 1;
   r += 1;
 
-  // Totals block
-  const totalRow = (label, value, opts = {}) => {
-    ws.mergeCells(`A${r}:E${r}`);
-    const labelCell = ws.getCell(`A${r}`);
+  // 합계 블록: 다섯 줄의 위치를 먼저 정해서, 부가세 방식(별도/포함)에 따라
+  // 서로 다른 방향으로 셀을 참조하는 수식을 쓸 수 있게 한다
+  const subtotalRow = r;
+  const vatRow = r + 1;
+  const grandRow = r + 2;
+  const depositRow = r + 3;
+  const balanceRow = r + 4;
+  const sumRange = `F${firstItemRow}:F${lastItemRow}`;
+
+  const writeTotalRow = (rowNum, label, formula, result, opts = {}) => {
+    ws.mergeCells(`A${rowNum}:E${rowNum}`);
+    const labelCell = ws.getCell(`A${rowNum}`);
     labelCell.value = label;
     labelCell.alignment = { horizontal: "right" };
-    const valueCell = ws.getCell(`F${r}`);
-    valueCell.value = value;
+    const valueCell = ws.getCell(`F${rowNum}`);
+    valueCell.value = { formula, result };
     valueCell.numFmt = "#,##0";
     valueCell.alignment = { horizontal: "right" };
     if (opts.grand) {
       for (let c = 1; c <= 6; c++) {
-        ws.getCell(r, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: ACCENT } };
-        ws.getCell(r, c).font = { bold: true, size: 13, color: { argb: "FFFFFFFF" } };
+        ws.getCell(rowNum, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: ACCENT } };
+        ws.getCell(rowNum, c).font = { bold: true, size: 13, color: { argb: "FFFFFFFF" } };
       }
-      ws.getRow(r).height = 22;
+      ws.getRow(rowNum).height = 22;
     } else {
       labelCell.font = { size: 10.5, color: { argb: "FF444444" } };
       valueCell.font = { size: 10.5 };
     }
-    r += 1;
   };
 
-  totalRow("합    계", quote.subtotal);
-  totalRow(`부가세 (${Math.round(quote.vatRate * 100)}%)`, quote.vat);
-  totalRow("총 합계금액", quote.total, { grand: true });
-  totalRow(`계약금 (${Math.round(quote.depositRate * 100)}%)`, quote.deposit);
-  totalRow("잔    금", quote.balance);
-  r += 1;
+  if (quote.vatMode === "inclusive") {
+    // 총 합계금액이 담은 단가의 합 그 자체이고, 공급가액/부가세는 거기서 역산
+    writeTotalRow(grandRow, "총 합계금액", `SUM(${sumRange})`, quote.total, { grand: true });
+    writeTotalRow(subtotalRow, "공급가액", `ROUND(F${grandRow}/(1+${quote.vatRate}),0)`, quote.subtotal);
+    writeTotalRow(vatRow, `부가세 (${Math.round(quote.vatRate * 100)}%)`, `F${grandRow}-F${subtotalRow}`, quote.vat);
+  } else {
+    writeTotalRow(subtotalRow, "공급가액", `SUM(${sumRange})`, quote.subtotal);
+    writeTotalRow(vatRow, `부가세 (${Math.round(quote.vatRate * 100)}%)`, `ROUND(F${subtotalRow}*${quote.vatRate},0)`, quote.vat);
+    writeTotalRow(grandRow, "총 합계금액", `F${subtotalRow}+F${vatRow}`, quote.total, { grand: true });
+  }
+  writeTotalRow(depositRow, `계약금 (${Math.round(quote.depositRate * 100)}%)`, `ROUND(F${grandRow}*${quote.depositRate},0)`, quote.deposit);
+  writeTotalRow(balanceRow, "잔    금", `F${grandRow}-F${depositRow}`, quote.balance);
 
-  const notes = getNotes(Math.round(quote.depositRate * 100));
+  r = balanceRow + 2;
+
+  const notes = getNotes(Math.round(quote.depositRate * 100), quote.vatMode);
   for (const line of notes) {
     ws.mergeCells(`A${r}:G${r}`);
     const cell = ws.getCell(`A${r}`);

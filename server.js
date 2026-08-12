@@ -29,12 +29,12 @@ app.get("/api/items", (req, res) => {
 });
 
 app.post("/api/quote/xlsx", async (req, res) => {
-  const { items: lineItems, vatRate, depositRate, meta } = req.body;
-  const errors = validateQuoteInput({ items: lineItems, vatRate, depositRate });
+  const { items: lineItems, vatRate, depositRate, vatMode, meta } = req.body;
+  const errors = validateQuoteInput({ items: lineItems, vatRate, depositRate, vatMode });
   if (errors.length > 0) {
     return res.status(400).json({ errors });
   }
-  const quote = calcQuote({ items: lineItems, vatRate, depositRate });
+  const quote = calcQuote({ items: lineItems, vatRate, depositRate, vatMode });
   const wb = await buildQuoteWorkbook({ meta: meta || {}, quote });
 
   res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
