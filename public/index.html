@@ -17,22 +17,23 @@
   * { box-sizing: border-box; }
   body {
     font-family: "Pretendard", "Malgun Gothic", -apple-system, sans-serif;
-    max-width: 980px;
+    font-size: 16px;
+    max-width: 640px;
     margin: 0 auto;
-    padding: 32px 20px 60px;
+    padding: 20px 14px 100px;
     background: var(--bg);
     color: var(--text);
   }
-  header.page-head { margin-bottom: 28px; }
-  header.page-head h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
-  header.page-head .sub { color: var(--muted); font-size: 13px; }
+  header.page-head { margin-bottom: 24px; }
+  header.page-head h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  header.page-head .sub { color: var(--muted); font-size: 13.5px; }
 
   .card {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 18px 20px;
-    margin-bottom: 18px;
+    padding: 16px;
+    margin-bottom: 16px;
     box-shadow: 0 1px 2px rgba(20, 40, 35, 0.04);
   }
   .card h2 {
@@ -44,14 +45,14 @@
     margin: 0 0 14px;
   }
 
-  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
-  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+  label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 3px; }
   input, select {
     width: 100%;
-    padding: 8px 10px;
+    padding: 10px;
     border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 14px;
+    border-radius: 8px;
+    font-size: 16px;
     background: #fff;
     color: var(--text);
   }
@@ -59,41 +60,39 @@
 
   .catalog { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
   .catalog button {
-    font-size: 12.5px;
-    padding: 7px 12px;
+    font-size: 13.5px;
+    min-height: 44px;
+    padding: 8px 14px;
     border: 1px solid var(--border);
     background: #fafcfb;
     border-radius: 999px;
     cursor: pointer;
     color: var(--text);
-    transition: all 0.12s ease;
   }
-  .catalog button:hover { background: var(--accent); color: #fff; border-color: var(--accent); transform: translateY(-1px); }
+  .catalog button:active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-  .chip-wrap { display: inline-flex; align-items: center; border-radius: 999px; overflow: hidden; }
+  .chip-wrap { display: inline-flex; align-items: stretch; border-radius: 999px; overflow: hidden; }
   .chip-wrap.custom .cat-btn { border-color: #cfe0da; background: #f2f8f5; }
   .chip-wrap .cat-del {
     border: 1px solid var(--border);
     border-left: none;
     background: #fafcfb;
     color: #b94a48;
-    font-size: 11px;
-    padding: 7px 9px;
+    font-size: 15px;
+    min-width: 44px;
     cursor: pointer;
     border-radius: 0 999px 999px 0;
   }
-  .chip-wrap .cat-del:hover { background: #fdeceb; }
   .chip-wrap .cat-btn { border-radius: 999px 0 0 999px; }
   .chip-wrap .cat-edit {
     border: 1px solid var(--border);
     border-left: none;
     background: #fafcfb;
     color: #3b6f82;
-    font-size: 11px;
-    padding: 7px 8px;
+    font-size: 13px;
+    min-width: 44px;
     cursor: pointer;
   }
-  .chip-wrap .cat-edit:hover { background: #eaf2f5; }
 
   .add-catalog-form {
     display: flex;
@@ -105,63 +104,156 @@
   .add-catalog-form input { width: auto; flex: 1 1 110px; }
   .add-catalog-form button {
     flex: 0 0 auto;
-    padding: 8px 14px;
+    min-height: 44px;
+    padding: 8px 16px;
     border: 1px solid var(--accent);
     background: #fff;
     color: var(--accent);
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
-  }
-  .add-catalog-form button:hover { background: var(--accent); color: #fff; }
-
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  thead th {
-    background: #eef3f1;
-    color: var(--accent-dark);
-    font-weight: 700;
-    padding: 8px 6px;
-    border-bottom: 2px solid var(--border);
-    position: sticky;
-    top: 0;
-  }
-  td { border-bottom: 1px solid var(--border); padding: 4px 6px; text-align: center; }
-  tbody tr:nth-child(even) { background: #fafbfa; }
-  tbody tr:hover { background: #f0f6f3; }
-  td input { border: none; background: transparent; padding: 6px 4px; text-align: center; }
-  td.name-cell input { text-align: left; }
-  td input:focus { background: #fff; border-radius: 4px; box-shadow: 0 0 0 2px rgba(29,111,92,0.15); }
-  .amount-cell { text-align: right; padding-right: 10px; font-variant-numeric: tabular-nums; }
-
-  .row-actions button {
-    border: none;
-    background: none;
-    color: #b94a48;
+    border-radius: 8px;
     cursor: pointer;
     font-size: 14px;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
+    font-weight: 600;
   }
-  .row-actions button:hover { background: #fdeceb; }
+
+  /* ===== 담은 품목: 모바일 카드 목록 ===== */
+  .items-list { display: flex; flex-direction: column; gap: 12px; }
+  .empty-state {
+    text-align: center;
+    color: var(--muted);
+    padding: 28px 12px;
+    font-size: 14.5px;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+  }
+  .item-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    background: #fff;
+  }
+  .item-card-row1 { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
+  .item-name-input {
+    flex: 1;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .card-del-btn {
+    flex-shrink: 0;
+    min-height: 44px;
+    padding: 0 14px;
+    border: 1px solid #e3b8b6;
+    background: #fdf3f2;
+    color: #b94a48;
+    border-radius: 8px;
+    font-size: 13.5px;
+    cursor: pointer;
+  }
+  .item-card-row2 { display: flex; gap: 8px; margin-bottom: 12px; }
+  .item-card-row2 input { font-size: 14.5px; padding: 9px; flex: 1; }
+  .item-card-row3 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .qty-stepper {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .stepper-btn {
+    width: 44px;
+    height: 44px;
+    border: none;
+    background: #f2f6f4;
+    color: var(--accent-dark);
+    font-size: 22px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .stepper-btn:active { background: var(--accent); color: #fff; }
+  .qty-display {
+    min-width: 46px;
+    text-align: center;
+    font-size: 17px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    align-self: center;
+  }
+  .price-field { display: flex; align-items: center; gap: 8px; }
+  .price-field label { margin: 0; font-size: 13px; color: var(--muted); }
+  .item-price-input {
+    width: 120px;
+    font-size: 16px;
+    padding: 10px 8px;
+    text-align: right;
+  }
+  .item-card-amount {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+  }
+  .item-card-amount span { font-size: 13px; color: var(--muted); }
+  .item-card-amount strong {
+    font-size: 19px;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent-dark);
+  }
+
+  .undo-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 20px;
+    transform: translateX(-50%);
+    background: #1f2a27;
+    color: #fff;
+    padding: 10px 10px 10px 18px;
+    border-radius: 999px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    z-index: 50;
+    max-width: calc(100% - 32px);
+  }
+  .undo-toast button {
+    background: rgba(255,255,255,0.12);
+    border: none;
+    color: #7fd8bd;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 999px;
+  }
 
   .add-row-btn {
     margin-top: 10px;
+    min-height: 44px;
+    width: 100%;
     padding: 8px 14px;
     border: 1px dashed #b9c4bf;
     background: none;
     border-radius: 8px;
     cursor: pointer;
     color: var(--muted);
-    font-size: 13px;
+    font-size: 14px;
   }
-  .add-row-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-  .rates-row { display: flex; gap: 28px; }
-  .rate-inline { display: flex; align-items: center; gap: 6px; }
-  .rate-inline label { margin: 0; font-size: 13px; color: var(--text); }
-  .rate-inline input { width: 64px; }
+  .rates-row { display: flex; gap: 20px; flex-wrap: wrap; }
+  .rate-inline { display: flex; align-items: center; gap: 8px; }
+  .rate-inline label { margin: 0; font-size: 14px; color: var(--text); }
+  .rate-inline input { width: 72px; }
 
   .totals-card {
     background: linear-gradient(135deg, var(--accent-dark), var(--accent));
@@ -169,10 +261,10 @@
     border: none;
   }
   .totals-card h2 { color: rgba(255,255,255,0.85); }
-  .totals div.line { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13.5px; color: rgba(255,255,255,0.85); }
+  .totals div.line { display: flex; justify-content: space-between; padding: 5px 0; font-size: 14.5px; color: rgba(255,255,255,0.85); }
   .totals .grand {
     font-weight: 700;
-    font-size: 20px;
+    font-size: 21px;
     color: #fff;
     border-top: 1px solid rgba(255,255,255,0.25);
     margin-top: 8px;
@@ -181,25 +273,25 @@
 
   .actions { margin-top: 6px; display: flex; gap: 10px; }
   .actions button {
+    min-height: 48px;
+    width: 100%;
     padding: 12px 22px;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     border-radius: 8px;
     border: none;
     cursor: pointer;
     background: var(--accent);
     color: #fff;
-    transition: background 0.12s ease;
   }
-  .actions button:hover { background: var(--accent-dark); }
 
-  .notes { font-size: 11.5px; color: var(--muted); margin-top: 18px; line-height: 1.7; }
+  .notes { font-size: 12px; color: var(--muted); margin-top: 18px; line-height: 1.7; }
 </style>
 </head>
 <body>
   <header class="page-head">
     <h1>화장실 인테리어 견적서 자동생성</h1>
-    <div class="sub">품목을 고르고 수량을 입력하면 부가세·계약금까지 자동 계산됩니다.</div>
+    <div class="sub">품목을 고르고 수량을 조절하면 부가세·계약금까지 바로 계산됩니다.</div>
   </header>
 
   <div class="card">
@@ -224,7 +316,7 @@
   </div>
 
   <div class="card">
-    <h2>자주 쓰는 품목 (클릭하면 표에 추가, 같은 품목을 다시 누르면 수량이 올라갑니다)</h2>
+    <h2>자주 쓰는 품목 (누르면 담기고, 같은 품목을 또 누르면 수량이 올라갑니다)</h2>
     <div class="catalog" id="catalog"></div>
     <div class="add-catalog-form">
       <input id="newItemName" placeholder="품명" />
@@ -232,20 +324,15 @@
       <input id="newItemUnit" placeholder="단위" value="EA" />
       <input id="newItemPrice" type="number" placeholder="단가" />
       <button id="addCatalogItemBtn">+ 자주 쓰는 품목으로 저장</button>
-      <button id="cancelEditBtn" type="button" style="display:none; background:none; border:1px solid var(--border); color: var(--muted); border-radius:6px; padding:8px 14px; font-size:13px; cursor:pointer;">취소</button>
+      <button id="cancelEditBtn" type="button" style="display:none; background:none; border:1px solid var(--border); color: var(--muted); border-radius:8px; padding:8px 16px; font-size:14px; cursor:pointer; min-height:44px;">취소</button>
     </div>
     <div class="notes" style="margin-top:8px">※ 새로 등록/수정/삭제한 내용은 이 컴퓨터의 이 브라우저에만 저장됩니다.</div>
   </div>
 
   <div class="card">
-    <h2>견적 항목</h2>
-    <table id="itemsTable">
-      <thead>
-        <tr><th>품명</th><th>규격</th><th>단위</th><th>수량</th><th>단가</th><th>금액</th><th></th></tr>
-      </thead>
-      <tbody id="itemsBody"></tbody>
-    </table>
-    <button class="add-row-btn" id="addRowBtn">+ 품목 직접 추가</button>
+    <h2>담은 품목</h2>
+    <div class="items-list" id="itemsList"></div>
+    <button class="add-row-btn" id="addRowBtn">+ 새 품목 직접 넣기</button>
   </div>
 
   <div class="card">
@@ -266,6 +353,11 @@
   </div>
 
   <div class="notes" id="notesArea"></div>
+
+  <div class="undo-toast" id="undoToast" style="display:none">
+    <span id="undoToastText"></span>
+    <button id="undoToastBtn">되돌리기</button>
+  </div>
 
   <script src="app.js"></script>
 </body>

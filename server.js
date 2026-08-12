@@ -2,6 +2,7 @@ const express = require("express");
 const items = require("./data/items");
 const { calcQuote } = require("./calc");
 const { buildQuoteWorkbook } = require("./xlsxExport");
+const { validateQuoteInput } = require("./validate");
 
 const app = express();
 
@@ -27,19 +28,11 @@ app.get("/api/items", (req, res) => {
   res.json(items);
 });
 
-app.post("/api/quote", (req, res) => {
-  const { items: lineItems, vatRate, depositRate } = req.body;
-  if (!Array.isArray(lineItems)) {
-    return res.status(400).json({ error: "items must be an array" });
-  }
-  const quote = calcQuote({ items: lineItems, vatRate, depositRate });
-  res.json(quote);
-});
-
 app.post("/api/quote/xlsx", async (req, res) => {
   const { items: lineItems, vatRate, depositRate, meta } = req.body;
-  if (!Array.isArray(lineItems)) {
-    return res.status(400).json({ error: "items must be an array" });
+  const errors = validateQuoteInput({ items: lineItems, vatRate, depositRate });
+  if (errors.length > 0) {
+    return res.status(400).json({ errors });
   }
   const quote = calcQuote({ items: lineItems, vatRate, depositRate });
   const wb = await buildQuoteWorkbook({ meta: meta || {}, quote });

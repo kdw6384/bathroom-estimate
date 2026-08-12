@@ -1,71 +1,123 @@
+// ===== 입력 제한값 (서버 validate.js와 동일하게 맞춰둠) =====
+const LIMITS = { qtyMax: 9999, priceMax: 100000000, rateMax: 100 };
+
+function clampQty(v) {
+  const n = Math.floor(Number(v));
+  if (!Number.isFinite(n) || n <= 0) return 1;
+  return Math.min(n, LIMITS.qtyMax);
+}
+function clampPrice(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(n, LIMITS.priceMax);
+}
+function clampRate(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(n, LIMITS.rateMax);
+}
+
+// ===== 브라우저에 저장되는 자주 쓰는 품목 (등록/수정/삭제) =====
 const CUSTOM_ITEMS_KEY = "bathroom-estimate-custom-items";
 const HIDDEN_ITEMS_KEY = "bathroom-estimate-hidden-items";
-
-function loadCustomItems() {
-  try {
-    const raw = localStorage.getItem(CUSTOM_ITEMS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveCustomItems() {
-  localStorage.setItem(CUSTOM_ITEMS_KEY, JSON.stringify(customItems));
-}
-
-function loadHiddenIds() {
-  try {
-    const raw = localStorage.getItem(HIDDEN_ITEMS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveHiddenIds() {
-  localStorage.setItem(HIDDEN_ITEMS_KEY, JSON.stringify([...hiddenIds]));
-}
-
 const OVERRIDES_KEY = "bathroom-estimate-item-overrides";
 
-function loadOverrides() {
+function loadJSON(key, fallback) {
   try {
-    const raw = localStorage.getItem(OVERRIDES_KEY);
-    return raw ? JSON.parse(raw) : {};
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
   } catch {
-    return {};
+    return fallback;
   }
 }
 
-function saveOverrides() {
-  localStorage.setItem(OVERRIDES_KEY, JSON.stringify(overrides));
-}
+// ===== 하나로 모은 상태 =====
+const state = {
+  catalog: [], // 서버 기본 품목
+  customItems: loadJSON(CUSTOM_ITEMS_KEY, []),
+  hiddenIds: new Set(loadJSON(HIDDEN_ITEMS_KEY, [])),
+  overrides: loadJSON(OVERRIDES_KEY, {}),
+  items: [], // 지금 담은 견적 항목
+  vatRatePercent: 10,
+  depositRatePercent: 50,
+  editingItemId: null,
+  editingIsCustom: false,
+  undo: null, // { item, index, timeoutId }
+};
 
-let catalog = [];
-let customItems = loadCustomItems();
-let hiddenIds = new Set(loadHiddenIds());
-let overrides = loadOverrides();
-let rows = [];
-let editingItemId = null;
-let editingIsCustom = false;
+let itemSeq = 0;
+const nextItemId = () => `row-${Date.now()}-${itemSeq++}`;
 
 const won = (n) => Math.round(n || 0).toLocaleString("ko-KR");
 
-async function init() {
-  const res = await fetch("/api/items");
-  catalog = await res.json();
+function saveCustomItems() {
+  localStorage.setItem(CUSTOM_ITEMS_KEY, JSON.stringify(state.customItems));
+}
+function saveHiddenIds() {
+  localStorage.setItem(HIDDEN_ITEMS_KEY, JSON.stringify([...state.hiddenIds]));
+}
+function saveOverrides() {
+  localStorage.setItem(OVERRIDES_KEY, JSON.stringify(state.overrides));
+}
+
+// ===== 계산: 서버 왕복 없이 브라우저에서 즉시 =====
+function computeQuote() {
+  const lineItems = state.items.map((it) => ({ ...it, amount: Math.round(it.qty * it.unitPrice) }));
+  const subtotal = lineItems.reduce((s, it) => s + it.amount, 0);
+  const vatRate = state.vatRatePercent / 100;
+  const vat = Math.round(subtotal * vatRate);
+  const total = subtotal + vat;
+  const depositRate = state.depositRatePercent / 100;
+  const deposit = Math.round(total * depositRate);
+  const balance = total - deposit;
+  return { lineItems, subtotal, vat, vatRate, total, deposit, depositRate, balance };
+}
+
+// ===== 화면 전체를 다시 그리는 단일 진입점 =====
+function render() {
   renderCatalog();
-  renderRows();
-  await recalc();
+  renderItemCards();
+  renderTotals(computeQuote());
   renderNotes();
 }
 
+// 텍스트 입력 중에는 포커스가 끊기지 않도록, 값 변경 시엔 render() 대신
+// 합계 영역만 갱신한다 (합계 카드는 입력칸이 없는 별도 DOM이라 안전함).
+function recalcTotalsOnly() {
+  renderTotals(computeQuote());
+  renderNotes();
+}
+
+async function init() {
+  const res = await fetch("/api/items");
+  state.catalog = await res.json();
+  render();
+}
+
+// ===== 자주 쓰는 품목 =====
 function allCatalogItems() {
-  const base = catalog
-    .filter((c) => !hiddenIds.has(c.id))
-    .map((c) => (overrides[c.id] ? { ...c, ...overrides[c.id] } : c));
-  return [...base, ...customItems];
+  const base = state.catalog
+    .filter((c) => !state.hiddenIds.has(c.id))
+    .map((c) => (state.overrides[c.id] ? { ...c, ...state.overrides[c.id] } : c));
+  return [...base, ...state.customItems];
+}
+
+function addOrBumpItem(item) {
+  const existing = state.items.find((r) => r.catalogId === item.id);
+  if (existing) {
+    existing.qty = clampQty(existing.qty + 1);
+  } else {
+    state.items.push({
+      id: nextItemId(),
+      catalogId: item.id,
+      name: item.name,
+      spec: item.spec,
+      unit: item.unit,
+      qty: 1,
+      unitPrice: clampPrice(item.unitPrice),
+    });
+  }
+  render();
 }
 
 function renderCatalog() {
@@ -79,16 +131,7 @@ function renderCatalog() {
     const btn = document.createElement("button");
     btn.className = "cat-btn";
     btn.textContent = `${item.name} (${won(item.unitPrice)}원/${item.unit || "-"})`;
-    btn.onclick = () => {
-      const existing = rows.find((r) => r.catalogId === item.id);
-      if (existing) {
-        existing.qty += 1;
-      } else {
-        rows.push({ catalogId: item.id, name: item.name, spec: item.spec, unit: item.unit, qty: 1, unitPrice: item.unitPrice });
-      }
-      renderRows();
-      recalc();
-    };
+    btn.onclick = () => addOrBumpItem(item);
     wrap.appendChild(btn);
 
     const edit = document.createElement("button");
@@ -97,7 +140,7 @@ function renderCatalog() {
     edit.title = "이 품목 수정";
     edit.onclick = (e) => {
       e.stopPropagation();
-      startEditing(item, isCustom);
+      startEditingCatalogItem(item, isCustom);
     };
     wrap.appendChild(edit);
 
@@ -108,14 +151,14 @@ function renderCatalog() {
     del.onclick = (e) => {
       e.stopPropagation();
       if (isCustom) {
-        customItems = customItems.filter((c) => c.id !== item.id);
+        state.customItems = state.customItems.filter((c) => c.id !== item.id);
         saveCustomItems();
       } else {
-        hiddenIds.add(item.id);
+        state.hiddenIds.add(item.id);
         saveHiddenIds();
       }
-      if (editingItemId === item.id) resetEditState();
-      renderCatalog();
+      if (state.editingItemId === item.id) resetCatalogEditState();
+      render();
     };
     wrap.appendChild(del);
 
@@ -123,21 +166,21 @@ function renderCatalog() {
   });
 }
 
-function startEditing(item, isCustom) {
+function startEditingCatalogItem(item, isCustom) {
   document.getElementById("newItemName").value = item.name;
   document.getElementById("newItemSpec").value = item.spec || "";
   document.getElementById("newItemUnit").value = item.unit || "EA";
   document.getElementById("newItemPrice").value = item.unitPrice;
-  editingItemId = item.id;
-  editingIsCustom = isCustom;
+  state.editingItemId = item.id;
+  state.editingIsCustom = isCustom;
   document.getElementById("addCatalogItemBtn").textContent = "수정 완료";
   document.getElementById("cancelEditBtn").style.display = "inline-block";
   document.getElementById("newItemName").focus();
 }
 
-function resetEditState() {
-  editingItemId = null;
-  editingIsCustom = false;
+function resetCatalogEditState() {
+  state.editingItemId = null;
+  state.editingIsCustom = false;
   document.getElementById("addCatalogItemBtn").textContent = "+ 자주 쓰는 품목으로 저장";
   document.getElementById("cancelEditBtn").style.display = "none";
   document.getElementById("newItemName").value = "";
@@ -146,96 +189,162 @@ function resetEditState() {
   document.getElementById("newItemPrice").value = "";
 }
 
+// ===== 담은 품목 (모바일 카드 목록) =====
 function addRow() {
-  rows.push({ name: "", spec: "", unit: "EA", qty: 1, unitPrice: 0 });
+  state.items.push({ id: nextItemId(), name: "", spec: "", unit: "EA", qty: 1, unitPrice: 0 });
+  render();
 }
 
-function renderRows() {
-  const body = document.getElementById("itemsBody");
-  body.innerHTML = "";
-  rows.forEach((row, idx) => {
-    const tr = document.createElement("tr");
+function removeRow(id) {
+  const idx = state.items.findIndex((r) => r.id === id);
+  if (idx === -1) return;
+  const [removed] = state.items.splice(idx, 1);
+  showUndoToast(removed, idx);
+  render();
+}
 
-    const nameTd = document.createElement("td");
-    nameTd.className = "name-cell";
-    nameTd.innerHTML = `<input value="${escapeHtml(row.name)}" data-field="name" />`;
-    tr.appendChild(nameTd);
+function showUndoToast(removedItem, index) {
+  if (state.undo) clearTimeout(state.undo.timeoutId);
+  const toast = document.getElementById("undoToast");
+  document.getElementById("undoToastText").textContent = `"${removedItem.name || "품목"}" 지웠어요`;
+  toast.style.display = "flex";
+  const timeoutId = setTimeout(() => {
+    state.undo = null;
+    toast.style.display = "none";
+  }, 5000);
+  state.undo = { item: removedItem, index, timeoutId };
+}
 
-    const specTd = document.createElement("td");
-    specTd.innerHTML = `<input value="${escapeHtml(row.spec || "")}" data-field="spec" />`;
-    tr.appendChild(specTd);
+function undoRemove() {
+  if (!state.undo) return;
+  clearTimeout(state.undo.timeoutId);
+  const { item, index } = state.undo;
+  state.items.splice(Math.min(index, state.items.length), 0, item);
+  state.undo = null;
+  document.getElementById("undoToast").style.display = "none";
+  render();
+}
 
-    const unitTd = document.createElement("td");
-    unitTd.innerHTML = `<input value="${escapeHtml(row.unit || "")}" data-field="unit" style="width:50px" />`;
-    tr.appendChild(unitTd);
+function renderItemCards() {
+  const container = document.getElementById("itemsList");
+  container.innerHTML = "";
 
-    const qtyTd = document.createElement("td");
-    qtyTd.innerHTML = `<input type="number" value="${row.qty}" data-field="qty" style="width:50px" />`;
-    tr.appendChild(qtyTd);
+  if (state.items.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = "아직 담은 품목이 없어요. 위에서 자주 쓰는 품목을 눌러 담아보세요.";
+    container.appendChild(empty);
+    return;
+  }
 
-    const priceTd = document.createElement("td");
-    priceTd.innerHTML = `<input type="number" value="${row.unitPrice}" data-field="unitPrice" style="width:80px" />`;
-    tr.appendChild(priceTd);
+  state.items.forEach((row) => {
+    const card = document.createElement("div");
+    card.className = "item-card";
 
-    const amountTd = document.createElement("td");
-    amountTd.className = "amount-cell";
-    amountTd.textContent = won(row.qty * row.unitPrice) + "원";
-    tr.appendChild(amountTd);
-
-    const actionTd = document.createElement("td");
-    actionTd.className = "row-actions";
-    const delBtn = document.createElement("button");
-    delBtn.textContent = "✕";
-    delBtn.onclick = () => {
-      rows.splice(idx, 1);
-      renderRows();
-      recalc();
-    };
-    actionTd.appendChild(delBtn);
-    tr.appendChild(actionTd);
-
-    tr.querySelectorAll("input").forEach((input) => {
-      input.addEventListener("input", (e) => {
-        const field = e.target.dataset.field;
-        const val = field === "qty" || field === "unitPrice" ? Number(e.target.value) : e.target.value;
-        rows[idx][field] = val;
-        if (field === "name") {
-          // manual edits detach the row from catalog-click quantity tracking
-          delete rows[idx].catalogId;
-        }
-        if (field === "qty" || field === "unitPrice") {
-          amountTd.textContent = won(rows[idx].qty * rows[idx].unitPrice) + "원";
-          recalc();
-        }
-      });
+    // 품명 + 이 줄 지우기
+    const row1 = document.createElement("div");
+    row1.className = "item-card-row1";
+    const nameInput = document.createElement("input");
+    nameInput.className = "item-name-input";
+    nameInput.value = row.name;
+    nameInput.placeholder = "품명";
+    nameInput.addEventListener("input", (e) => {
+      row.name = e.target.value;
+      delete row.catalogId;
     });
+    row1.appendChild(nameInput);
 
-    body.appendChild(tr);
+    const delBtn = document.createElement("button");
+    delBtn.className = "card-del-btn";
+    delBtn.textContent = "이 줄 지우기";
+    delBtn.onclick = () => removeRow(row.id);
+    row1.appendChild(delBtn);
+    card.appendChild(row1);
+
+    // 규격 / 단위
+    const row2 = document.createElement("div");
+    row2.className = "item-card-row2";
+    const specInput = document.createElement("input");
+    specInput.placeholder = "규격";
+    specInput.value = row.spec || "";
+    specInput.addEventListener("input", (e) => { row.spec = e.target.value; });
+    const unitInput = document.createElement("input");
+    unitInput.placeholder = "단위";
+    unitInput.value = row.unit || "";
+    unitInput.addEventListener("input", (e) => { row.unit = e.target.value; });
+    row2.appendChild(specInput);
+    row2.appendChild(unitInput);
+    card.appendChild(row2);
+
+    // 수량 스테퍼 + 단가
+    const row3 = document.createElement("div");
+    row3.className = "item-card-row3";
+
+    const stepper = document.createElement("div");
+    stepper.className = "qty-stepper";
+    const minusBtn = document.createElement("button");
+    minusBtn.className = "stepper-btn";
+    minusBtn.type = "button";
+    minusBtn.textContent = "−";
+    minusBtn.onclick = () => {
+      row.qty = clampQty(row.qty - 1);
+      qtyDisplay.textContent = row.qty;
+      amountValue.textContent = won(row.qty * row.unitPrice) + "원";
+      recalcTotalsOnly();
+    };
+    const qtyDisplay = document.createElement("span");
+    qtyDisplay.className = "qty-display";
+    qtyDisplay.textContent = row.qty;
+    const plusBtn = document.createElement("button");
+    plusBtn.className = "stepper-btn";
+    plusBtn.type = "button";
+    plusBtn.textContent = "+";
+    plusBtn.onclick = () => {
+      row.qty = clampQty(row.qty + 1);
+      qtyDisplay.textContent = row.qty;
+      amountValue.textContent = won(row.qty * row.unitPrice) + "원";
+      recalcTotalsOnly();
+    };
+    stepper.appendChild(minusBtn);
+    stepper.appendChild(qtyDisplay);
+    stepper.appendChild(plusBtn);
+    row3.appendChild(stepper);
+
+    const priceField = document.createElement("div");
+    priceField.className = "price-field";
+    const priceLabel = document.createElement("label");
+    priceLabel.textContent = "단가";
+    const priceInput = document.createElement("input");
+    priceInput.className = "item-price-input";
+    priceInput.type = "number";
+    priceInput.value = row.unitPrice;
+    priceInput.addEventListener("input", (e) => {
+      row.unitPrice = clampPrice(e.target.value);
+      amountValue.textContent = won(row.qty * row.unitPrice) + "원";
+      recalcTotalsOnly();
+    });
+    priceField.appendChild(priceLabel);
+    priceField.appendChild(priceInput);
+    row3.appendChild(priceField);
+
+    card.appendChild(row3);
+
+    // 금액
+    const amountRow = document.createElement("div");
+    amountRow.className = "item-card-amount";
+    const amountLabel = document.createElement("span");
+    amountLabel.textContent = "금액";
+    const amountValue = document.createElement("strong");
+    amountValue.textContent = won(row.qty * row.unitPrice) + "원";
+    amountRow.appendChild(amountLabel);
+    amountRow.appendChild(amountValue);
+    card.appendChild(amountRow);
+
+    container.appendChild(card);
   });
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
-function getRates() {
-  const vatRate = Number(document.getElementById("vatRate").value) / 100;
-  const depositRate = Number(document.getElementById("depositRate").value) / 100;
-  return { vatRate, depositRate };
-}
-
-async function recalc() {
-  const { vatRate, depositRate } = getRates();
-  const validItems = rows.filter((r) => r.name && r.qty > 0);
-  const res = await fetch("/api/quote", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ items: validItems, vatRate, depositRate }),
-  });
-  const quote = await res.json();
-  renderTotals(quote);
-}
-
+// ===== 요율 / 합계 =====
 function renderTotals(quote) {
   const el = document.getElementById("totals");
   el.innerHTML = `
@@ -248,65 +357,68 @@ function renderTotals(quote) {
 }
 
 function renderNotes() {
-  const { depositRate } = getRates();
   const el = document.getElementById("notesArea");
   el.innerHTML = [
     "※ 상기 금액은 부가세 별도입니다.",
-    `※ 계약금 ${Math.round(depositRate * 100)}%, 공사완료 후 나머지 잔금 입금.`,
+    `※ 계약금 ${state.depositRatePercent}%, 공사완료 후 나머지 잔금 입금.`,
     "※ 하자 보수기간은 공사종료 후 시점부터 1년간 보장함.",
     "※ 견적금액은 현장작업 상황에 따라 변동될 수 있습니다.",
   ].join("<br/>");
 }
 
-document.getElementById("addRowBtn").addEventListener("click", () => {
-  addRow();
-  renderRows();
-});
+// ===== 이벤트 바인딩 =====
+document.getElementById("addRowBtn").addEventListener("click", addRow);
+
+document.getElementById("undoToastBtn").addEventListener("click", undoRemove);
 
 document.getElementById("addCatalogItemBtn").addEventListener("click", () => {
   const name = document.getElementById("newItemName").value.trim();
   const spec = document.getElementById("newItemSpec").value.trim();
   const unit = document.getElementById("newItemUnit").value.trim() || "EA";
-  const unitPrice = Number(document.getElementById("newItemPrice").value) || 0;
+  const unitPrice = clampPrice(document.getElementById("newItemPrice").value);
   if (!name) {
     alert("품명을 입력해주세요.");
     return;
   }
 
-  if (editingItemId) {
-    if (editingIsCustom) {
-      const target = customItems.find((c) => c.id === editingItemId);
+  if (state.editingItemId) {
+    if (state.editingIsCustom) {
+      const target = state.customItems.find((c) => c.id === state.editingItemId);
       if (target) Object.assign(target, { name, spec, unit, unitPrice });
       saveCustomItems();
     } else {
-      overrides[editingItemId] = { name, spec, unit, unitPrice };
+      state.overrides[state.editingItemId] = { name, spec, unit, unitPrice };
       saveOverrides();
     }
-    resetEditState();
+    resetCatalogEditState();
   } else {
     const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    customItems.push({ id, name, spec, unit, unitPrice, custom: true });
+    state.customItems.push({ id, name, spec, unit, unitPrice, custom: true });
     saveCustomItems();
     document.getElementById("newItemName").value = "";
     document.getElementById("newItemSpec").value = "";
     document.getElementById("newItemPrice").value = "";
   }
-  renderCatalog();
+  render();
 });
 
-document.getElementById("cancelEditBtn").addEventListener("click", () => {
-  resetEditState();
-});
+document.getElementById("cancelEditBtn").addEventListener("click", resetCatalogEditState);
 
-document.getElementById("vatRate").addEventListener("input", recalc);
-document.getElementById("depositRate").addEventListener("input", () => {
-  recalc();
-  renderNotes();
+document.getElementById("vatRate").addEventListener("input", (e) => {
+  state.vatRatePercent = clampRate(e.target.value);
+  recalcTotalsOnly();
+});
+document.getElementById("depositRate").addEventListener("input", (e) => {
+  state.depositRatePercent = clampRate(e.target.value);
+  recalcTotalsOnly();
 });
 
 document.getElementById("downloadBtn").addEventListener("click", async () => {
-  const { vatRate, depositRate } = getRates();
-  const validItems = rows.filter((r) => r.name && r.qty > 0);
+  const validItems = state.items.filter((r) => r.name && r.qty > 0);
+  if (validItems.length === 0) {
+    alert("담은 품목이 없어요. 먼저 품목을 담아주세요.");
+    return;
+  }
   const meta = {
     supplierName: document.getElementById("supplierName").value,
     supplierRep: document.getElementById("supplierRep").value,
@@ -321,8 +433,18 @@ document.getElementById("downloadBtn").addEventListener("click", async () => {
   const res = await fetch("/api/quote/xlsx", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ items: validItems, vatRate, depositRate, meta }),
+    body: JSON.stringify({
+      items: validItems,
+      vatRate: state.vatRatePercent / 100,
+      depositRate: state.depositRatePercent / 100,
+      meta,
+    }),
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    alert((err.errors && err.errors.join("\n")) || "엑셀을 만들지 못했어요. 입력값을 확인해주세요.");
+    return;
+  }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
