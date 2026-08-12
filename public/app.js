@@ -1,4 +1,5 @@
 const CUSTOM_ITEMS_KEY = "bathroom-estimate-custom-items";
+const HIDDEN_ITEMS_KEY = "bathroom-estimate-hidden-items";
 
 function loadCustomItems() {
   try {
@@ -13,9 +14,41 @@ function saveCustomItems() {
   localStorage.setItem(CUSTOM_ITEMS_KEY, JSON.stringify(customItems));
 }
 
+function loadHiddenIds() {
+  try {
+    const raw = localStorage.getItem(HIDDEN_ITEMS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHiddenIds() {
+  localStorage.setItem(HIDDEN_ITEMS_KEY, JSON.stringify([...hiddenIds]));
+}
+
+const OVERRIDES_KEY = "bathroom-estimate-item-overrides";
+
+function loadOverrides() {
+  try {
+    const raw = localStorage.getItem(OVERRIDES_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveOverrides() {
+  localStorage.setItem(OVERRIDES_KEY, JSON.stringify(overrides));
+}
+
 let catalog = [];
 let customItems = loadCustomItems();
+let hiddenIds = new Set(loadHiddenIds());
+let overrides = loadOverrides();
 let rows = [];
+let editingItemId = null;
+let editingIsCustom = false;
 
 const won = (n) => Math.round(n || 0).toLocaleString("ko-KR");
 
@@ -29,7 +62,10 @@ async function init() {
 }
 
 function allCatalogItems() {
-  return [...catalog, ...customItems];
+  const base = catalog
+    .filter((c) => !hiddenIds.has(c.id))
+    .map((c) => (overrides[c.id] ? { ...c, ...overrides[c.id] } : c));
+  return [...base, ...customItems];
 }
 
 function renderCatalog() {
@@ -55,22 +91,59 @@ function renderCatalog() {
     };
     wrap.appendChild(btn);
 
-    if (isCustom) {
-      const del = document.createElement("button");
-      del.className = "cat-del";
-      del.textContent = "×";
-      del.title = "이 품목 삭제";
-      del.onclick = (e) => {
-        e.stopPropagation();
+    const edit = document.createElement("button");
+    edit.className = "cat-edit";
+    edit.textContent = "✎";
+    edit.title = "이 품목 수정";
+    edit.onclick = (e) => {
+      e.stopPropagation();
+      startEditing(item, isCustom);
+    };
+    wrap.appendChild(edit);
+
+    const del = document.createElement("button");
+    del.className = "cat-del";
+    del.textContent = "×";
+    del.title = "이 품목 삭제";
+    del.onclick = (e) => {
+      e.stopPropagation();
+      if (isCustom) {
         customItems = customItems.filter((c) => c.id !== item.id);
         saveCustomItems();
-        renderCatalog();
-      };
-      wrap.appendChild(del);
-    }
+      } else {
+        hiddenIds.add(item.id);
+        saveHiddenIds();
+      }
+      if (editingItemId === item.id) resetEditState();
+      renderCatalog();
+    };
+    wrap.appendChild(del);
 
     el.appendChild(wrap);
   });
+}
+
+function startEditing(item, isCustom) {
+  document.getElementById("newItemName").value = item.name;
+  document.getElementById("newItemSpec").value = item.spec || "";
+  document.getElementById("newItemUnit").value = item.unit || "EA";
+  document.getElementById("newItemPrice").value = item.unitPrice;
+  editingItemId = item.id;
+  editingIsCustom = isCustom;
+  document.getElementById("addCatalogItemBtn").textContent = "수정 완료";
+  document.getElementById("cancelEditBtn").style.display = "inline-block";
+  document.getElementById("newItemName").focus();
+}
+
+function resetEditState() {
+  editingItemId = null;
+  editingIsCustom = false;
+  document.getElementById("addCatalogItemBtn").textContent = "+ 자주 쓰는 품목으로 저장";
+  document.getElementById("cancelEditBtn").style.display = "none";
+  document.getElementById("newItemName").value = "";
+  document.getElementById("newItemSpec").value = "";
+  document.getElementById("newItemUnit").value = "EA";
+  document.getElementById("newItemPrice").value = "";
 }
 
 function addRow() {
@@ -198,13 +271,30 @@ document.getElementById("addCatalogItemBtn").addEventListener("click", () => {
     alert("품명을 입력해주세요.");
     return;
   }
-  const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  customItems.push({ id, name, spec, unit, unitPrice, custom: true });
-  saveCustomItems();
+
+  if (editingItemId) {
+    if (editingIsCustom) {
+      const target = customItems.find((c) => c.id === editingItemId);
+      if (target) Object.assign(target, { name, spec, unit, unitPrice });
+      saveCustomItems();
+    } else {
+      overrides[editingItemId] = { name, spec, unit, unitPrice };
+      saveOverrides();
+    }
+    resetEditState();
+  } else {
+    const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    customItems.push({ id, name, spec, unit, unitPrice, custom: true });
+    saveCustomItems();
+    document.getElementById("newItemName").value = "";
+    document.getElementById("newItemSpec").value = "";
+    document.getElementById("newItemPrice").value = "";
+  }
   renderCatalog();
-  document.getElementById("newItemName").value = "";
-  document.getElementById("newItemSpec").value = "";
-  document.getElementById("newItemPrice").value = "";
+});
+
+document.getElementById("cancelEditBtn").addEventListener("click", () => {
+  resetEditState();
 });
 
 document.getElementById("vatRate").addEventListener("input", recalc);

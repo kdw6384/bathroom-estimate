@@ -84,6 +84,16 @@
   }
   .chip-wrap .cat-del:hover { background: #fdeceb; }
   .chip-wrap .cat-btn { border-radius: 999px 0 0 999px; }
+  .chip-wrap .cat-edit {
+    border: 1px solid var(--border);
+    border-left: none;
+    background: #fafcfb;
+    color: #3b6f82;
+    font-size: 11px;
+    padding: 7px 8px;
+    cursor: pointer;
+  }
+  .chip-wrap .cat-edit:hover { background: #eaf2f5; }
 
   .add-catalog-form {
     display: flex;
@@ -195,19 +205,19 @@
   <div class="card">
     <h2>공급자 정보 (우리 업체)</h2>
     <div class="meta-grid">
-      <div><label>업체명</label><input id="supplierName" placeholder="예: OO인테리어" /></div>
-      <div><label>대표자</label><input id="supplierRep" placeholder="예: 김훈철" /></div>
-      <div><label>연락처</label><input id="supplierContact" placeholder="예: 010-0000-0000" /></div>
-      <div><label>입금 계좌</label><input id="supplierAccount" placeholder="예: 우리은행 1002-000-000000" /></div>
+      <div><label>업체명</label><input id="supplierName" /></div>
+      <div><label>대표자</label><input id="supplierRep" /></div>
+      <div><label>연락처</label><input id="supplierContact" /></div>
+      <div><label>입금 계좌</label><input id="supplierAccount" /></div>
     </div>
   </div>
 
   <div class="card">
     <h2>현장 정보</h2>
     <div class="meta-grid">
-      <div><label>거래처명</label><input id="clientName" placeholder="예: 한국아파트 관리사무소" /></div>
-      <div><label>연락처</label><input id="contact" placeholder="예: 010-0000-0000" /></div>
-      <div><label>현장주소</label><input id="siteAddress" placeholder="예: 부천시 ..." /></div>
+      <div><label>거래처명</label><input id="clientName" /></div>
+      <div><label>연락처</label><input id="contact" /></div>
+      <div><label>현장주소</label><input id="siteAddress" /></div>
       <div><label>상담일자</label><input id="consultDate" type="date" /></div>
       <div><label>시공예정일</label><input id="workDate" type="date" /></div>
     </div>
@@ -217,13 +227,14 @@
     <h2>자주 쓰는 품목 (클릭하면 표에 추가, 같은 품목을 다시 누르면 수량이 올라갑니다)</h2>
     <div class="catalog" id="catalog"></div>
     <div class="add-catalog-form">
-      <input id="newItemName" placeholder="품명 (예: 욕조)" />
-      <input id="newItemSpec" placeholder="규격 (선택)" />
-      <input id="newItemUnit" placeholder="단위 (예: EA)" value="EA" />
+      <input id="newItemName" placeholder="품명" />
+      <input id="newItemSpec" placeholder="규격" />
+      <input id="newItemUnit" placeholder="단위" value="EA" />
       <input id="newItemPrice" type="number" placeholder="단가" />
       <button id="addCatalogItemBtn">+ 자주 쓰는 품목으로 저장</button>
+      <button id="cancelEditBtn" type="button" style="display:none; background:none; border:1px solid var(--border); color: var(--muted); border-radius:6px; padding:8px 14px; font-size:13px; cursor:pointer;">취소</button>
     </div>
-    <div class="notes" style="margin-top:8px">※ 등록한 품목은 이 컴퓨터의 이 브라우저에만 저장됩니다.</div>
+    <div class="notes" style="margin-top:8px">※ 새로 등록/수정/삭제한 내용은 이 컴퓨터의 이 브라우저에만 저장됩니다.</div>
   </div>
 
   <div class="card">
