@@ -135,7 +135,21 @@ async function init() {
 }
 
 // ===== 자주 쓰는 품목 =====
+// 로그인 상태면 Supabase의 내 단가표(price_items)가 곧 카탈로그다.
+// 로그인 전이면 서버 기본 25종 + 이 브라우저에 저장된 커스텀 품목을 쓴다.
 function allCatalogItems() {
+  if (window.cloudState && window.cloudState.user) {
+    return window.cloudState.priceItems.map((p) => ({
+      id: p.id,
+      name: p.name,
+      spec: p.spec,
+      unit: p.unit,
+      unitPrice: p.sale_price,
+      costPrice: p.cost_price,
+      category: p.category,
+      cloud: true,
+    }));
+  }
   const base = state.catalog
     .filter((c) => !state.hiddenIds.has(c.id))
     .map((c) => (state.overrides[c.id] ? { ...c, ...state.overrides[c.id] } : c));
@@ -164,13 +178,22 @@ function renderCatalog() {
   const el = document.getElementById("catalog");
   el.innerHTML = "";
   allCatalogItems().forEach((item) => {
+    const isCloud = item.cloud === true;
     const isCustom = item.custom === true;
     const wrap = document.createElement("span");
-    wrap.className = "chip-wrap" + (isCustom ? " custom" : "");
+    wrap.className = "chip-wrap" + (isCustom || isCloud ? " custom" : "");
 
     const btn = document.createElement("button");
     btn.className = "cat-btn";
-    btn.textContent = `${item.name} (${won(item.unitPrice)}원/${item.unit || "-"})`;
+    let label = `${item.name} (${won(item.unitPrice)}원/${item.unit || "-"})`;
+    if (isCloud && item.category) {
+      label = `[${item.category}] ${label}`;
+    }
+    if (isCloud && item.costPrice > 0 && item.unitPrice > 0) {
+      const marginPercent = Math.round(((item.unitPrice - item.costPrice) / item.unitPrice) * 100);
+      label += ` · 마진 ${marginPercent}%`;
+    }
+    btn.textContent = label;
     btn.onclick = () => addOrBumpItem(item);
     wrap.appendChild(btn);
 
@@ -180,7 +203,7 @@ function renderCatalog() {
     edit.title = "이 품목 수정";
     edit.onclick = (e) => {
       e.stopPropagation();
-      startEditingCatalogItem(item, isCustom);
+      startEditingCatalogItem(item, isCustom, isCloud);
     };
     wrap.appendChild(edit);
 
@@ -188,9 +211,11 @@ function renderCatalog() {
     del.className = "cat-del";
     del.textContent = "×";
     del.title = "이 품목 삭제";
-    del.onclick = (e) => {
+    del.onclick = async (e) => {
       e.stopPropagation();
-      if (isCustom) {
+      if (isCloud) {
+        await deletePriceItem(item.id);
+      } else if (isCustom) {
         state.customItems = state.customItems.filter((c) => c.id !== item.id);
         saveCustomItems();
       } else {
@@ -206,11 +231,15 @@ function renderCatalog() {
   });
 }
 
-function startEditingCatalogItem(item, isCustom) {
+function startEditingCatalogItem(item, isCustom, isCloud) {
   document.getElementById("newItemName").value = item.name;
   document.getElementById("newItemSpec").value = item.spec || "";
   document.getElementById("newItemUnit").value = item.unit || "EA";
   document.getElementById("newItemPrice").value = item.unitPrice;
+  if (isCloud) {
+    document.getElementById("newItemCost").value = item.costPrice || 0;
+    document.getElementById("newItemCategory").value = item.category || "자재";
+  }
   state.editingItemId = item.id;
   state.editingIsCustom = isCustom;
   document.getElementById("addCatalogItemBtn").textContent = "수정 완료";
@@ -227,6 +256,8 @@ function resetCatalogEditState() {
   document.getElementById("newItemSpec").value = "";
   document.getElementById("newItemUnit").value = "EA";
   document.getElementById("newItemPrice").value = "";
+  document.getElementById("newItemCost").value = "";
+  document.getElementById("newItemCategory").value = "자재";
 }
 
 // ===== 담은 품목 (모바일 카드 목록) =====
@@ -414,13 +445,28 @@ document.getElementById("addRowBtn").addEventListener("click", addRow);
 
 document.getElementById("undoToastBtn").addEventListener("click", undoRemove);
 
-document.getElementById("addCatalogItemBtn").addEventListener("click", () => {
+document.getElementById("addCatalogItemBtn").addEventListener("click", async () => {
   const name = document.getElementById("newItemName").value.trim();
   const spec = document.getElementById("newItemSpec").value.trim();
   const unit = document.getElementById("newItemUnit").value.trim() || "EA";
   const unitPrice = clampPrice(document.getElementById("newItemPrice").value);
+  const costPrice = clampPrice(document.getElementById("newItemCost").value);
+  const category = document.getElementById("newItemCategory").value;
   if (!name) {
     alert("품명을 입력해주세요.");
+    return;
+  }
+
+  if (window.cloudState && window.cloudState.user) {
+    if (state.editingItemId) {
+      await updatePriceItem(state.editingItemId, {
+        name, spec, unit, category, sale_price: unitPrice, cost_price: costPrice,
+      });
+    } else {
+      await addPriceItem({ name, spec, unit, category, sale_price: unitPrice, cost_price: costPrice });
+    }
+    resetCatalogEditState();
+    render();
     return;
   }
 
@@ -507,6 +553,50 @@ document.getElementById("downloadBtn").addEventListener("click", async () => {
   a.download = `${meta.clientName || "견적서"}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
+});
+
+// ===== 로그인 상태 변화에 맞춰 화면 갱신 (cloud.js가 이벤트를 쏨) =====
+function debounce(fn, ms) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}
+
+const saveCompanyInfoDebounced = debounce(() => {
+  if (!(window.cloudState && window.cloudState.user)) return;
+  saveCompanyInfo({
+    name: document.getElementById("supplierName").value,
+    rep: document.getElementById("supplierRep").value,
+    contact: document.getElementById("supplierContact").value,
+    account: document.getElementById("supplierAccount").value,
+    biz_reg_no: document.getElementById("supplierBizRegNo").value,
+  });
+}, 800);
+
+["supplierName", "supplierRep", "supplierContact", "supplierAccount", "supplierBizRegNo"].forEach((id) => {
+  document.getElementById(id).addEventListener("input", saveCompanyInfoDebounced);
+});
+
+document.addEventListener("cloud-changed", () => {
+  const loggedIn = !!(window.cloudState && window.cloudState.user);
+  document.getElementById("newItemCost").style.display = loggedIn ? "" : "none";
+  document.getElementById("newItemCategory").style.display = loggedIn ? "" : "none";
+  document.getElementById("catalogSaveNote").textContent = loggedIn
+    ? "※ 로그인 계정에 저장돼서 다른 기기에서도 그대로 보여요."
+    : "※ 새로 등록/수정/삭제한 내용은 이 컴퓨터의 이 브라우저에만 저장됩니다.";
+
+  if (loggedIn && window.cloudState.companyInfo) {
+    const c = window.cloudState.companyInfo;
+    document.getElementById("supplierName").value = c.name || "";
+    document.getElementById("supplierRep").value = c.rep || "";
+    document.getElementById("supplierContact").value = c.contact || "";
+    document.getElementById("supplierAccount").value = c.account || "";
+    document.getElementById("supplierBizRegNo").value = c.biz_reg_no || "";
+  }
+
+  render();
 });
 
 init();
