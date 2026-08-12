@@ -1,5 +1,5 @@
 const ExcelJS = require("exceljs");
-const notes = require("./data/notes");
+const getNotes = require("./data/notes");
 
 const ACCENT = "FF1D6F5C";
 const ACCENT_DARK = "FF12463A";
@@ -159,6 +159,7 @@ async function buildQuoteWorkbook({ meta, quote }) {
   totalRow("잔    금", quote.balance);
   r += 1;
 
+  const notes = getNotes(Math.round(quote.depositRate * 100));
   for (const line of notes) {
     ws.mergeCells(`A${r}:G${r}`);
     const cell = ws.getCell(`A${r}`);

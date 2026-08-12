@@ -248,10 +248,11 @@ function renderTotals(quote) {
 }
 
 function renderNotes() {
+  const { depositRate } = getRates();
   const el = document.getElementById("notesArea");
   el.innerHTML = [
     "※ 상기 금액은 부가세 별도입니다.",
-    "※ 계약금 50%, 공사완료 후 나머지 잔금 입금.",
+    `※ 계약금 ${Math.round(depositRate * 100)}%, 공사완료 후 나머지 잔금 입금.`,
     "※ 하자 보수기간은 공사종료 후 시점부터 1년간 보장함.",
     "※ 견적금액은 현장작업 상황에 따라 변동될 수 있습니다.",
   ].join("<br/>");
@@ -298,7 +299,10 @@ document.getElementById("cancelEditBtn").addEventListener("click", () => {
 });
 
 document.getElementById("vatRate").addEventListener("input", recalc);
-document.getElementById("depositRate").addEventListener("input", recalc);
+document.getElementById("depositRate").addEventListener("input", () => {
+  recalc();
+  renderNotes();
+});
 
 document.getElementById("downloadBtn").addEventListener("click", async () => {
   const { vatRate, depositRate } = getRates();
