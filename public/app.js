@@ -1,4 +1,20 @@
+const CUSTOM_ITEMS_KEY = "bathroom-estimate-custom-items";
+
+function loadCustomItems() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_ITEMS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomItems() {
+  localStorage.setItem(CUSTOM_ITEMS_KEY, JSON.stringify(customItems));
+}
+
 let catalog = [];
+let customItems = loadCustomItems();
 let rows = [];
 
 const won = (n) => Math.round(n || 0).toLocaleString("ko-KR");
@@ -7,17 +23,25 @@ async function init() {
   const res = await fetch("/api/items");
   catalog = await res.json();
   renderCatalog();
-  addRow();
   renderRows();
   await recalc();
   renderNotes();
 }
 
+function allCatalogItems() {
+  return [...catalog, ...customItems];
+}
+
 function renderCatalog() {
   const el = document.getElementById("catalog");
   el.innerHTML = "";
-  catalog.forEach((item) => {
+  allCatalogItems().forEach((item) => {
+    const isCustom = item.custom === true;
+    const wrap = document.createElement("span");
+    wrap.className = "chip-wrap" + (isCustom ? " custom" : "");
+
     const btn = document.createElement("button");
+    btn.className = "cat-btn";
     btn.textContent = `${item.name} (${won(item.unitPrice)}원/${item.unit || "-"})`;
     btn.onclick = () => {
       const existing = rows.find((r) => r.catalogId === item.id);
@@ -29,7 +53,23 @@ function renderCatalog() {
       renderRows();
       recalc();
     };
-    el.appendChild(btn);
+    wrap.appendChild(btn);
+
+    if (isCustom) {
+      const del = document.createElement("button");
+      del.className = "cat-del";
+      del.textContent = "×";
+      del.title = "이 품목 삭제";
+      del.onclick = (e) => {
+        e.stopPropagation();
+        customItems = customItems.filter((c) => c.id !== item.id);
+        saveCustomItems();
+        renderCatalog();
+      };
+      wrap.appendChild(del);
+    }
+
+    el.appendChild(wrap);
   });
 }
 
@@ -147,6 +187,24 @@ function renderNotes() {
 document.getElementById("addRowBtn").addEventListener("click", () => {
   addRow();
   renderRows();
+});
+
+document.getElementById("addCatalogItemBtn").addEventListener("click", () => {
+  const name = document.getElementById("newItemName").value.trim();
+  const spec = document.getElementById("newItemSpec").value.trim();
+  const unit = document.getElementById("newItemUnit").value.trim() || "EA";
+  const unitPrice = Number(document.getElementById("newItemPrice").value) || 0;
+  if (!name) {
+    alert("품명을 입력해주세요.");
+    return;
+  }
+  const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  customItems.push({ id, name, spec, unit, unitPrice, custom: true });
+  saveCustomItems();
+  renderCatalog();
+  document.getElementById("newItemName").value = "";
+  document.getElementById("newItemSpec").value = "";
+  document.getElementById("newItemPrice").value = "";
 });
 
 document.getElementById("vatRate").addEventListener("input", recalc);
