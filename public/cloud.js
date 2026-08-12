@@ -71,13 +71,15 @@ function escapeHtmlCloud(s) {
 }
 
 async function signInWithKakao() {
-  // account_email은 카카오 쪽에서 사업자 인증이 있어야 열리는 동의항목이라
-  // 요청 자체를 빼고, 닉네임/프로필 사진만 요청한다.
+  // Supabase가 카카오 기본 스코프(account_email profile_image profile_nickname)를
+  // 이미 요청한다. 여기서 scopes를 또 지정하면 대체가 아니라 뒤에 덧붙는 방식이라
+  // "profile_nickname profile_image profile_nickname profile_image"처럼 중복돼
+  // 카카오 로그인 세션이 있는 브라우저에서 KOE 오류가 났다. 세 동의항목을 모두
+  // 카카오 쪽에서 켰으니 커스텀 scopes 없이 기본값을 그대로 쓴다.
   await supabaseClient.auth.signInWithOAuth({
     provider: "kakao",
     options: {
       redirectTo: window.location.origin + window.location.pathname,
-      scopes: "profile_nickname profile_image",
     },
   });
 }
@@ -100,7 +102,24 @@ async function saveCompanyInfo(fields) {
   if (!window.cloudState.user) return;
   const row = { id: window.cloudState.user.id, ...fields, updated_at: new Date().toISOString() };
   const { error } = await supabaseClient.from("companies").upsert(row);
-  if (!error) window.cloudState.companyInfo = row;
+  // upsert만 보낸 컬럼만 갱신하지만, 로컬 캐시는 통째로 덮어쓰면 방금 안 보낸
+  // 필드(예: 이름)가 화면에서 비어 보이므로 병합해서 저장한다.
+  if (!error) window.cloudState.companyInfo = { ...window.cloudState.companyInfo, ...row };
+}
+
+// ===== 로고 / 직인 이미지 =====
+async function uploadCompanyImage(kind, file) {
+  const ext = (file.name.split(".").pop() || "png").toLowerCase();
+  const path = `${window.cloudState.user.id}/${kind}.${ext}`;
+  const { error: uploadError } = await supabaseClient.storage
+    .from("company-assets")
+    .upload(path, file, { upsert: true, cacheControl: "3600" });
+  if (uploadError) return { error: uploadError };
+
+  const { data } = supabaseClient.storage.from("company-assets").getPublicUrl(path);
+  const urlField = kind === "logo" ? "logo_url" : "stamp_url";
+  await saveCompanyInfo({ [urlField]: data.publicUrl });
+  return { url: data.publicUrl };
 }
 
 // ===== 내 단가표 =====

@@ -529,6 +529,8 @@ document.getElementById("downloadBtn").addEventListener("click", async () => {
     workDate: document.getElementById("workDate").value,
     quoteNumber: nextQuoteNumber(),
     validUntil: validUntilDate(15),
+    logoUrl: window.cloudState?.companyInfo?.logo_url || "",
+    stampUrl: window.cloudState?.companyInfo?.stamp_url || "",
   };
   const res = await fetch("/api/quote/xlsx", {
     method: "POST",
@@ -583,6 +585,7 @@ document.addEventListener("cloud-changed", () => {
   const loggedIn = !!(window.cloudState && window.cloudState.user);
   document.getElementById("newItemCost").style.display = loggedIn ? "" : "none";
   document.getElementById("newItemCategory").style.display = loggedIn ? "" : "none";
+  document.getElementById("logoStampSection").style.display = loggedIn ? "block" : "none";
   document.getElementById("catalogSaveNote").textContent = loggedIn
     ? "※ 로그인 계정에 저장돼서 다른 기기에서도 그대로 보여요."
     : "※ 새로 등록/수정/삭제한 내용은 이 컴퓨터의 이 브라우저에만 저장됩니다.";
@@ -594,9 +597,41 @@ document.addEventListener("cloud-changed", () => {
     document.getElementById("supplierContact").value = c.contact || "";
     document.getElementById("supplierAccount").value = c.account || "";
     document.getElementById("supplierBizRegNo").value = c.biz_reg_no || "";
+    showImagePreview("logoPreview", c.logo_url);
+    showImagePreview("stampPreview", c.stamp_url);
   }
 
   render();
+});
+
+function showImagePreview(elId, url) {
+  const img = document.getElementById(elId);
+  if (url) {
+    img.src = url;
+    img.style.display = "inline-block";
+  } else {
+    img.style.display = "none";
+  }
+}
+
+async function handleImageUpload(kind, inputEl, previewElId) {
+  const file = inputEl.files[0];
+  if (!file) return;
+  inputEl.disabled = true;
+  const { url, error } = await uploadCompanyImage(kind, file);
+  inputEl.disabled = false;
+  if (error) {
+    alert("이미지 업로드에 실패했어요. 다시 시도해주세요.");
+    return;
+  }
+  showImagePreview(previewElId, url);
+}
+
+document.getElementById("logoUpload").addEventListener("change", (e) => {
+  handleImageUpload("logo", e.target, "logoPreview");
+});
+document.getElementById("stampUpload").addEventListener("change", (e) => {
+  handleImageUpload("stamp", e.target, "stampPreview");
 });
 
 init();

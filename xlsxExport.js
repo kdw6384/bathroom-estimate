@@ -10,6 +10,20 @@ const BORDER_COLOR = "FFD8E0DD";
 const thinBorder = { style: "thin", color: { argb: BORDER_COLOR } };
 const box = { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder };
 
+async function fetchImageForExcel(url) {
+  if (!url) return null;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const arrayBuffer = await res.arrayBuffer();
+    const rawExt = (url.split(".").pop() || "png").split("?")[0].toLowerCase();
+    const extension = rawExt === "jpg" ? "jpeg" : ["png", "jpeg", "gif"].includes(rawExt) ? rawExt : "png";
+    return { buffer: Buffer.from(arrayBuffer), extension };
+  } catch {
+    return null;
+  }
+}
+
 async function buildQuoteWorkbook({ meta, quote }) {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("견적서", { pageSetup: { fitToPage: true, fitToWidth: 1 } });
@@ -35,6 +49,12 @@ async function buildQuoteWorkbook({ meta, quote }) {
   for (let c = 1; c <= 7; c++) {
     ws.getCell(2, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: ACCENT } };
     ws.getCell(1, c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: ACCENT } };
+  }
+
+  const logoImg = await fetchImageForExcel(meta.logoUrl);
+  if (logoImg) {
+    const imageId = wb.addImage(logoImg);
+    ws.addImage(imageId, { tl: { col: 5.75, row: 0.15 }, ext: { width: 60, height: 60 } });
   }
 
   let r = 4;
@@ -177,6 +197,12 @@ async function buildQuoteWorkbook({ meta, quote }) {
   }
   writeTotalRow(depositRow, `계약금 (${Math.round(quote.depositRate * 100)}%)`, `ROUND(F${grandRow}*${quote.depositRate},0)`, quote.deposit);
   writeTotalRow(balanceRow, "잔    금", `F${grandRow}-F${depositRow}`, quote.balance);
+
+  const stampImg = await fetchImageForExcel(meta.stampUrl);
+  if (stampImg) {
+    const imageId = wb.addImage(stampImg);
+    ws.addImage(imageId, { tl: { col: 0.3, row: subtotalRow - 1 + 0.1 }, ext: { width: 56, height: 56 } });
+  }
 
   r = balanceRow + 2;
 
