@@ -20,7 +20,12 @@ function renderCatalog() {
     const btn = document.createElement("button");
     btn.textContent = `${item.name} (${won(item.unitPrice)}원/${item.unit || "-"})`;
     btn.onclick = () => {
-      rows.push({ name: item.name, spec: item.spec, unit: item.unit, qty: 1, unitPrice: item.unitPrice });
+      const existing = rows.find((r) => r.catalogId === item.id);
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        rows.push({ catalogId: item.id, name: item.name, spec: item.spec, unit: item.unit, qty: 1, unitPrice: item.unitPrice });
+      }
       renderRows();
       recalc();
     };
@@ -81,6 +86,10 @@ function renderRows() {
         const field = e.target.dataset.field;
         const val = field === "qty" || field === "unitPrice" ? Number(e.target.value) : e.target.value;
         rows[idx][field] = val;
+        if (field === "name") {
+          // manual edits detach the row from catalog-click quantity tracking
+          delete rows[idx].catalogId;
+        }
         if (field === "qty" || field === "unitPrice") {
           amountTd.textContent = won(rows[idx].qty * rows[idx].unitPrice) + "원";
           recalc();
@@ -117,11 +126,11 @@ async function recalc() {
 function renderTotals(quote) {
   const el = document.getElementById("totals");
   el.innerHTML = `
-    <div><span>합계</span><span>${won(quote.subtotal)}원</span></div>
-    <div><span>부가세 (${Math.round(quote.vatRate * 100)}%)</span><span>${won(quote.vat)}원</span></div>
-    <div class="grand"><span>총 합계금액</span><span>${won(quote.total)}원</span></div>
-    <div><span>계약금 (${Math.round(quote.depositRate * 100)}%)</span><span>${won(quote.deposit)}원</span></div>
-    <div><span>잔금</span><span>${won(quote.balance)}원</span></div>
+    <div class="line"><span>합계</span><span>${won(quote.subtotal)}원</span></div>
+    <div class="line"><span>부가세 (${Math.round(quote.vatRate * 100)}%)</span><span>${won(quote.vat)}원</span></div>
+    <div class="line grand"><span>총 합계금액</span><span>${won(quote.total)}원</span></div>
+    <div class="line"><span>계약금 (${Math.round(quote.depositRate * 100)}%)</span><span>${won(quote.deposit)}원</span></div>
+    <div class="line"><span>잔금</span><span>${won(quote.balance)}원</span></div>
   `;
 }
 
@@ -147,6 +156,10 @@ document.getElementById("downloadBtn").addEventListener("click", async () => {
   const { vatRate, depositRate } = getRates();
   const validItems = rows.filter((r) => r.name && r.qty > 0);
   const meta = {
+    supplierName: document.getElementById("supplierName").value,
+    supplierRep: document.getElementById("supplierRep").value,
+    supplierContact: document.getElementById("supplierContact").value,
+    supplierAccount: document.getElementById("supplierAccount").value,
     clientName: document.getElementById("clientName").value,
     contact: document.getElementById("contact").value,
     siteAddress: document.getElementById("siteAddress").value,
