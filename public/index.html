@@ -346,27 +346,43 @@
   .quote-list { display: flex; flex-direction: column; gap: 10px; }
   .quote-row {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    flex-direction: column;
+    gap: 6px;
     padding: 12px;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: #fafcfb;
   }
-  .quote-row-main { flex: 1; min-width: 0; }
-  .quote-row-title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .quote-row-title .client { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .quote-status-badge {
-    font-size: 11px;
+  .quote-row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .quote-row-top .client {
+    flex: 1 1 0%;
+    min-width: 0;
+    font-size: 15px;
     font-weight: 700;
-    padding: 2px 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .quote-status-select {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: 100px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 8px;
     border-radius: 999px;
+    border: none;
     background: #eaf5f1;
     color: var(--accent);
-    flex-shrink: 0;
   }
-  .quote-row-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+  .quote-status-select.status-draft { background: #eaf5f1; color: var(--accent); }
+  .quote-status-select.status-sent { background: #e8f0fb; color: #2a5fa5; }
+  .quote-status-select.status-contracted { background: #fdf2df; color: #a5711a; }
+  .quote-status-select.status-cancelled { background: #f5eaea; color: #9a4a4a; }
+  .quote-row-sub { font-size: 12.5px; color: var(--muted); }
+  .quote-row-bottom { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   .quote-row-amount { font-size: 14.5px; font-weight: 700; color: var(--accent-dark); white-space: nowrap; }
+  .quote-row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
   .quote-open-btn {
     flex-shrink: 0;
     min-height: 40px;
@@ -378,6 +394,7 @@
     font-size: 13.5px;
     cursor: pointer;
   }
+  .quote-del-btn { border-color: #e3b8b6; background: #fdf3f2; color: #b94a48; }
 </style>
 </head>
 <body>
@@ -490,6 +507,11 @@
   <div class="undo-toast" id="undoToast" style="display:none">
     <span id="undoToastText"></span>
     <button id="undoToastBtn">되돌리기</button>
+  </div>
+
+  <div class="undo-toast" id="quoteUndoToast" style="display:none">
+    <span id="quoteUndoToastText"></span>
+    <button id="quoteUndoToastBtn">되돌리기</button>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>

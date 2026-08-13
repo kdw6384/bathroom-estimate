@@ -227,6 +227,19 @@ async function fetchQuoteList(searchText) {
   return { data: data || [], error };
 }
 
+async function updateQuoteStatus(id, status) {
+  const { error } = await supabaseClient
+    .from("quotes")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  return { error };
+}
+
+async function deleteQuoteFromCloud(id) {
+  const { error } = await supabaseClient.from("quotes").delete().eq("id", id);
+  return { error };
+}
+
 async function fetchQuoteWithItems(id) {
   const [quoteRes, itemsRes] = await Promise.all([
     supabaseClient.from("quotes").select("*").eq("id", id).single(),

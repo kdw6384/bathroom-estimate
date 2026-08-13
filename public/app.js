@@ -50,6 +50,7 @@ const state = {
   saveStatus: "idle", // idle | saving | saved
   quoteList: [],
   quoteSearchText: "",
+  quoteUndo: null, // { quote, items, timeoutId }
 };
 
 let itemSeq = 0;
@@ -698,25 +699,56 @@ function renderQuoteList() {
     el.appendChild(empty);
     return;
   }
+  const STATUS_OPTIONS = ["작성중", "발송", "계약", "취소"];
+  const statusClass = (s) => ({ 작성중: "draft", 발송: "sent", 계약: "contracted", 취소: "cancelled" }[s] || "draft");
+
   state.quoteList.forEach((q) => {
     const row = document.createElement("div");
     row.className = "quote-row";
 
-    const main = document.createElement("div");
-    main.className = "quote-row-main";
-    main.innerHTML = `
-      <div class="quote-row-title">
-        <span class="client">${escapeHtmlApp(q.client_name || "거래처명 없음")}</span>
-        <span class="quote-status-badge">${escapeHtmlApp(q.status || "작성중")}</span>
-      </div>
-      <div class="quote-row-sub">${escapeHtmlApp(q.quote_number || "")} · ${formatShortDateTime(q.updated_at)} 수정</div>
-    `;
-    row.appendChild(main);
+    const top = document.createElement("div");
+    top.className = "quote-row-top";
+    const client = document.createElement("span");
+    client.className = "client";
+    client.textContent = q.client_name || "거래처명 없음";
+    top.appendChild(client);
 
-    const amount = document.createElement("div");
+    const statusSelect = document.createElement("select");
+    statusSelect.className = "quote-status-select status-" + statusClass(q.status);
+    STATUS_OPTIONS.forEach((s) => {
+      const opt = document.createElement("option");
+      opt.value = s;
+      opt.textContent = s;
+      if (s === (q.status || "작성중")) opt.selected = true;
+      statusSelect.appendChild(opt);
+    });
+    statusSelect.addEventListener("change", async (e) => {
+      const newStatus = e.target.value;
+      statusSelect.className = "quote-status-select status-" + statusClass(newStatus);
+      const { error } = await updateQuoteStatus(q.id, newStatus);
+      if (error) {
+        alert("상태를 바꾸지 못했어요. 다시 시도해주세요.");
+        return;
+      }
+      q.status = newStatus;
+    });
+    top.appendChild(statusSelect);
+    row.appendChild(top);
+
+    const sub = document.createElement("div");
+    sub.className = "quote-row-sub";
+    sub.textContent = `${q.quote_number || ""} · ${formatShortDateTime(q.updated_at)} 수정`;
+    row.appendChild(sub);
+
+    const bottom = document.createElement("div");
+    bottom.className = "quote-row-bottom";
+    const amount = document.createElement("span");
     amount.className = "quote-row-amount";
     amount.textContent = won(q.total) + "원";
-    row.appendChild(amount);
+    bottom.appendChild(amount);
+
+    const actions = document.createElement("div");
+    actions.className = "quote-row-actions";
 
     const openBtn = document.createElement("button");
     openBtn.className = "quote-open-btn";
@@ -724,14 +756,27 @@ function renderQuoteList() {
     openBtn.textContent = state.currentQuoteId === q.id ? "편집중" : "불러오기";
     openBtn.disabled = state.currentQuoteId === q.id;
     openBtn.onclick = () => openQuoteFromList(q.id);
-    row.appendChild(openBtn);
+    actions.appendChild(openBtn);
+
+    const dupBtn = document.createElement("button");
+    dupBtn.className = "quote-open-btn";
+    dupBtn.type = "button";
+    dupBtn.textContent = "이 견적으로 새로 만들기";
+    dupBtn.onclick = () => duplicateQuoteFromList(q.id);
+    actions.appendChild(dupBtn);
+
+    const delBtn = document.createElement("button");
+    delBtn.className = "quote-open-btn quote-del-btn";
+    delBtn.type = "button";
+    delBtn.textContent = "삭제";
+    delBtn.onclick = () => deleteQuoteFromList(q.id);
+    actions.appendChild(delBtn);
+
+    bottom.appendChild(actions);
+    row.appendChild(bottom);
 
     el.appendChild(row);
   });
-}
-
-function escapeHtmlApp(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
 async function openQuoteFromList(id) {
@@ -771,6 +816,120 @@ async function openQuoteFromList(id) {
   document.getElementById("itemsList").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+async function duplicateQuoteFromList(id) {
+  const { quote, items, error } = await fetchQuoteWithItems(id);
+  if (error || !quote) {
+    alert("복제하지 못했어요. 다시 시도해주세요.");
+    return;
+  }
+  state.items = items.map((it) => ({
+    id: nextItemId(),
+    name: it.name,
+    spec: it.spec || "",
+    unit: it.unit || "",
+    qty: clampQty(it.qty),
+    unitPrice: clampPrice(it.unit_price),
+  }));
+  // 새 견적으로 취급: 새 견적번호를 받고, 상담일/시공일은 다시 잡도록 비운다.
+  state.currentQuoteId = null;
+  state.quoteNumber = nextQuoteNumber();
+  state.validUntil = validUntilDate(15);
+  state.vatMode = quote.vat_mode || "exclusive";
+  state.vatRatePercent = clampRate(quote.vat_rate ?? 10);
+  state.depositRatePercent = clampRate(quote.deposit_rate ?? 50);
+  state.saveStatus = "idle";
+
+  document.getElementById("clientName").value = quote.client_name || "";
+  document.getElementById("contact").value = quote.contact || "";
+  document.getElementById("siteAddress").value = quote.site_address || "";
+  document.getElementById("consultDate").value = "";
+  document.getElementById("workDate").value = "";
+  document.getElementById("vatRate").value = state.vatRatePercent;
+  document.getElementById("depositRate").value = state.depositRatePercent;
+  document.querySelectorAll(".vat-mode-btn").forEach((b) => b.classList.toggle("active", b.dataset.mode === state.vatMode));
+
+  render();
+  renderSaveStatus();
+  scheduleAutosave();
+  document.getElementById("itemsList").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function deleteQuoteFromList(id) {
+  const idx = state.quoteList.findIndex((q) => q.id === id);
+  if (idx === -1) return;
+
+  const { quote, items, error } = await fetchQuoteWithItems(id);
+  if (error || !quote) {
+    alert("삭제하지 못했어요. 다시 시도해주세요.");
+    return;
+  }
+  const { error: delError } = await deleteQuoteFromCloud(id);
+  if (delError) {
+    alert("삭제하지 못했어요. 다시 시도해주세요.");
+    return;
+  }
+
+  // 지금 편집 중인 견적을 지웠다면, 다음 자동저장이 이미 사라진 행을 갱신하려다
+  // 조용히 실패하지 않도록 새 견적으로 취급한다.
+  if (state.currentQuoteId === id) {
+    state.currentQuoteId = null;
+    state.quoteNumber = null;
+    state.validUntil = null;
+  }
+
+  state.quoteList.splice(idx, 1);
+  renderQuoteList();
+  showQuoteUndoToast(quote, items);
+}
+
+function showQuoteUndoToast(quote, items) {
+  if (state.quoteUndo) clearTimeout(state.quoteUndo.timeoutId);
+  const toast = document.getElementById("quoteUndoToast");
+  document.getElementById("quoteUndoToastText").textContent = `"${quote.client_name || "견적"}" 지웠어요`;
+  toast.style.display = "flex";
+  const timeoutId = setTimeout(() => {
+    state.quoteUndo = null;
+    toast.style.display = "none";
+  }, 5000);
+  state.quoteUndo = { quote, items, timeoutId };
+}
+
+async function undoDeleteQuote() {
+  if (!state.quoteUndo) return;
+  clearTimeout(state.quoteUndo.timeoutId);
+  const { quote, items } = state.quoteUndo;
+  state.quoteUndo = null;
+  document.getElementById("quoteUndoToast").style.display = "none";
+
+  const fields = {
+    quote_number: quote.quote_number,
+    valid_until: quote.valid_until,
+    status: quote.status || "작성중",
+    client_name: quote.client_name,
+    contact: quote.contact,
+    site_address: quote.site_address,
+    consult_date: quote.consult_date,
+    work_date: quote.work_date,
+    vat_mode: quote.vat_mode,
+    vat_rate: quote.vat_rate,
+    deposit_rate: quote.deposit_rate,
+    subtotal: quote.subtotal,
+    vat: quote.vat,
+    total: quote.total,
+    deposit: quote.deposit,
+    balance: quote.balance,
+  };
+  const restoreItems = items.map((it) => ({
+    name: it.name, spec: it.spec, unit: it.unit, qty: it.qty, unitPrice: it.unit_price,
+  }));
+  const { error } = await saveQuoteToCloud(null, fields, restoreItems);
+  if (error) {
+    alert("되돌리지 못했어요. 다시 시도해주세요.");
+    return;
+  }
+  refreshQuoteList();
+}
+
 function startNewQuote() {
   state.items = [];
   state.currentQuoteId = null;
@@ -792,6 +951,7 @@ const scheduleQuoteSearch = debounce(() => {
 
 document.getElementById("quoteSearchInput").addEventListener("input", scheduleQuoteSearch);
 document.getElementById("newQuoteBtn").addEventListener("click", startNewQuote);
+document.getElementById("quoteUndoToastBtn").addEventListener("click", undoDeleteQuote);
 
 document.addEventListener("cloud-changed", () => {
   const loggedIn = !!(window.cloudState && window.cloudState.user);
