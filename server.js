@@ -6,27 +6,10 @@ const { validateQuoteInput } = require("./validate");
 
 const app = express();
 
-const APP_PASSWORD = process.env.APP_PASSWORD || "bathroom1234";
-
-// 카카오톡으로 전달되는 공유 견적서 링크는 사장님 전용 비밀번호를 몰라도 열려야 한다.
-// (카카오톡 인앱 브라우저는 기본인증 자체도 잘 처리 못 하는 문제가 따로 있음 — 그와 별개로
-// 이 경로들은 고객이 여는 화면이라 애초에 비밀번호로 막으면 안 됨)
-const PUBLIC_PATHS = new Set(["/share.html", "/share.js", "/supabaseConfig.js"]);
-
-function basicAuth(req, res, next) {
-  if (PUBLIC_PATHS.has(req.path)) return next();
-  const header = req.headers.authorization || "";
-  const [scheme, encoded] = header.split(" ");
-  if (scheme === "Basic" && encoded) {
-    const decoded = Buffer.from(encoded, "base64").toString("utf8");
-    const [, password] = decoded.split(":");
-    if (password === APP_PASSWORD) return next();
-  }
-  res.set("WWW-Authenticate", 'Basic realm="bathroom-estimate"');
-  res.status(401).send("비밀번호가 필요합니다.");
-}
-
-app.use(basicAuth);
+// 사이트 전체를 막던 비밀번호(기본인증)는 제거했다. 실제 접근 제어는 카카오
+// 로그인 + Supabase RLS가 담당한다 (로그인 안 하면 각자 계정 데이터에 접근 불가).
+// 카카오톡 인앱 브라우저는 기본인증을 잘 처리 못 하는 문제도 있어서, 카카오톡으로
+// 링크를 주고받는 이 앱의 배포 방식과는 애초에 맞지 않았다.
 app.use(express.json());
 app.use(express.static("public"));
 
