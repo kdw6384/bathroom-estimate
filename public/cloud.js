@@ -179,4 +179,39 @@ async function deletePriceItem(id) {
   return { error };
 }
 
+// ===== 견적 저장 =====
+// quoteId가 없으면 새로 만들고, 있으면 그 행을 갱신한다.
+// 품목은 개수가 적어(보통 20줄 이내) 매번 통째로 지우고 다시 넣는 방식으로 단순하게 처리한다.
+async function saveQuoteToCloud(quoteId, fields, items) {
+  if (!window.cloudState.user) return { id: quoteId, error: null };
+  const row = { ...fields, user_id: window.cloudState.user.id, updated_at: new Date().toISOString() };
+  let id = quoteId;
+  let error;
+  if (id) {
+    ({ error } = await supabaseClient.from("quotes").update(row).eq("id", id));
+  } else {
+    const inserted = await supabaseClient.from("quotes").insert(row).select().single();
+    error = inserted.error;
+    if (!error) id = inserted.data.id;
+  }
+  if (error) return { id: quoteId, error };
+
+  await supabaseClient.from("quote_items").delete().eq("quote_id", id);
+  if (items.length > 0) {
+    const itemRows = items.map((it, idx) => ({
+      quote_id: id,
+      name: it.name,
+      spec: it.spec || "",
+      unit: it.unit || "",
+      qty: it.qty,
+      unit_price: it.unitPrice,
+      amount: Math.round(it.qty * it.unitPrice),
+      sort_order: idx,
+    }));
+    const { error: itemsError } = await supabaseClient.from("quote_items").insert(itemRows);
+    if (itemsError) return { id, error: itemsError };
+  }
+  return { id, error: null };
+}
+
 initCloud();

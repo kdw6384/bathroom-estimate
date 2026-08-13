@@ -44,6 +44,10 @@ const state = {
   editingItemId: null,
   editingIsCustom: false,
   undo: null, // { item, index, timeoutId }
+  currentQuoteId: null, // 로그인 상태에서 자동저장 중인 견적의 DB id (아직 없으면 null)
+  quoteNumber: null,
+  validUntil: null,
+  saveStatus: "idle", // idle | saving | saved
 };
 
 let itemSeq = 0;
@@ -86,6 +90,15 @@ function validUntilDate(daysFromNow = 15) {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+// 이 견적의 견적번호/유효기간은 처음 저장(자동저장 또는 다운로드)되는 시점에 한 번만 정하고
+// 그 뒤로는 계속 재사용한다 (다운로드할 때마다, 저장할 때마다 새 번호가 나오면 안 됨).
+function ensureQuoteMeta() {
+  if (!state.quoteNumber) {
+    state.quoteNumber = nextQuoteNumber();
+    state.validUntil = validUntilDate(15);
+  }
 }
 
 // ===== 계산: 서버 왕복 없이 브라우저에서 즉시 =====
@@ -172,6 +185,7 @@ function addOrBumpItem(item) {
     });
   }
   render();
+  scheduleAutosave();
 }
 
 function renderCatalog() {
@@ -272,6 +286,7 @@ function removeRow(id) {
   const [removed] = state.items.splice(idx, 1);
   showUndoToast(removed, idx);
   render();
+  scheduleAutosave();
 }
 
 function showUndoToast(removedItem, index) {
@@ -294,6 +309,7 @@ function undoRemove() {
   state.undo = null;
   document.getElementById("undoToast").style.display = "none";
   render();
+  scheduleAutosave();
 }
 
 function renderItemCards() {
@@ -322,6 +338,7 @@ function renderItemCards() {
     nameInput.addEventListener("input", (e) => {
       row.name = e.target.value;
       delete row.catalogId;
+      scheduleAutosave();
     });
     row1.appendChild(nameInput);
 
@@ -338,11 +355,11 @@ function renderItemCards() {
     const specInput = document.createElement("input");
     specInput.placeholder = "규격";
     specInput.value = row.spec || "";
-    specInput.addEventListener("input", (e) => { row.spec = e.target.value; });
+    specInput.addEventListener("input", (e) => { row.spec = e.target.value; scheduleAutosave(); });
     const unitInput = document.createElement("input");
     unitInput.placeholder = "단위";
     unitInput.value = row.unit || "";
-    unitInput.addEventListener("input", (e) => { row.unit = e.target.value; });
+    unitInput.addEventListener("input", (e) => { row.unit = e.target.value; scheduleAutosave(); });
     row2.appendChild(specInput);
     row2.appendChild(unitInput);
     card.appendChild(row2);
@@ -362,6 +379,7 @@ function renderItemCards() {
       qtyDisplay.textContent = row.qty;
       amountValue.textContent = won(row.qty * row.unitPrice) + "원";
       recalcTotalsOnly();
+      scheduleAutosave();
     };
     const qtyDisplay = document.createElement("span");
     qtyDisplay.className = "qty-display";
@@ -375,6 +393,7 @@ function renderItemCards() {
       qtyDisplay.textContent = row.qty;
       amountValue.textContent = won(row.qty * row.unitPrice) + "원";
       recalcTotalsOnly();
+      scheduleAutosave();
     };
     stepper.appendChild(minusBtn);
     stepper.appendChild(qtyDisplay);
@@ -393,6 +412,7 @@ function renderItemCards() {
       row.unitPrice = clampPrice(e.target.value);
       amountValue.textContent = won(row.qty * row.unitPrice) + "원";
       recalcTotalsOnly();
+      scheduleAutosave();
     });
     priceField.appendChild(priceLabel);
     priceField.appendChild(priceInput);
@@ -496,10 +516,12 @@ document.getElementById("cancelEditBtn").addEventListener("click", resetCatalogE
 document.getElementById("vatRate").addEventListener("input", (e) => {
   state.vatRatePercent = clampRate(e.target.value);
   recalcTotalsOnly();
+  scheduleAutosave();
 });
 document.getElementById("depositRate").addEventListener("input", (e) => {
   state.depositRatePercent = clampRate(e.target.value);
   recalcTotalsOnly();
+  scheduleAutosave();
 });
 
 document.querySelectorAll(".vat-mode-btn").forEach((btn) => {
@@ -507,6 +529,7 @@ document.querySelectorAll(".vat-mode-btn").forEach((btn) => {
     state.vatMode = btn.dataset.mode;
     document.querySelectorAll(".vat-mode-btn").forEach((b) => b.classList.toggle("active", b === btn));
     recalcTotalsOnly();
+    scheduleAutosave();
   });
 });
 
@@ -516,6 +539,7 @@ document.getElementById("downloadBtn").addEventListener("click", async () => {
     alert("담은 품목이 없어요. 먼저 품목을 담아주세요.");
     return;
   }
+  ensureQuoteMeta();
   const meta = {
     supplierName: document.getElementById("supplierName").value,
     supplierRep: document.getElementById("supplierRep").value,
@@ -527,8 +551,8 @@ document.getElementById("downloadBtn").addEventListener("click", async () => {
     siteAddress: document.getElementById("siteAddress").value,
     consultDate: document.getElementById("consultDate").value,
     workDate: document.getElementById("workDate").value,
-    quoteNumber: nextQuoteNumber(),
-    validUntil: validUntilDate(15),
+    quoteNumber: state.quoteNumber,
+    validUntil: state.validUntil,
     logoUrl: window.cloudState?.companyInfo?.logo_url || "",
     stampUrl: window.cloudState?.companyInfo?.stamp_url || "",
   };
@@ -581,11 +605,73 @@ const saveCompanyInfoDebounced = debounce(() => {
   document.getElementById(id).addEventListener("input", saveCompanyInfoDebounced);
 });
 
+// ===== 견적 자동저장 (로그인 상태에서만) =====
+function renderSaveStatus() {
+  const el = document.getElementById("saveStatus");
+  if (!el) return;
+  if (!(window.cloudState && window.cloudState.user)) {
+    el.textContent = "";
+    return;
+  }
+  if (state.saveStatus === "saving") el.textContent = "저장 중…";
+  else if (state.saveStatus === "saved") el.textContent = "☁ 저장됨";
+  else el.textContent = "";
+}
+
+const scheduleAutosave = debounce(async () => {
+  if (!(window.cloudState && window.cloudState.user)) return;
+  const validItems = state.items.filter((r) => r.name && r.qty > 0);
+  const clientName = document.getElementById("clientName").value;
+  if (validItems.length === 0 && !clientName) return; // 저장할 내용이 아직 없음
+
+  ensureQuoteMeta();
+  state.saveStatus = "saving";
+  renderSaveStatus();
+
+  const quote = computeQuote();
+  const fields = {
+    quote_number: state.quoteNumber,
+    valid_until: state.validUntil,
+    client_name: clientName,
+    contact: document.getElementById("contact").value,
+    site_address: document.getElementById("siteAddress").value,
+    consult_date: document.getElementById("consultDate").value || null,
+    work_date: document.getElementById("workDate").value || null,
+    vat_mode: state.vatMode,
+    vat_rate: state.vatRatePercent,
+    deposit_rate: state.depositRatePercent,
+    subtotal: quote.subtotal,
+    vat: quote.vat,
+    total: quote.total,
+    deposit: quote.deposit,
+    balance: quote.balance,
+  };
+  if (!state.currentQuoteId) fields.status = "작성중"; // 기존 견적의 상태는 자동저장이 건드리지 않는다
+
+  const { id, error } = await saveQuoteToCloud(state.currentQuoteId, fields, validItems);
+  state.saveStatus = error ? "idle" : "saved";
+  if (!error) state.currentQuoteId = id;
+  renderSaveStatus();
+}, 1200);
+
+["clientName", "contact", "siteAddress", "consultDate", "workDate"].forEach((id) => {
+  document.getElementById(id).addEventListener("input", scheduleAutosave);
+});
+
 document.addEventListener("cloud-changed", () => {
   const loggedIn = !!(window.cloudState && window.cloudState.user);
+  if (!loggedIn) {
+    // 로그아웃하면 다음 저장은 새 견적으로 취급한다 (다른 계정의 견적에 이어붙지 않도록).
+    state.currentQuoteId = null;
+    state.quoteNumber = null;
+    state.validUntil = null;
+    state.saveStatus = "idle";
+  }
+  renderSaveStatus();
   document.getElementById("newItemCost").style.display = loggedIn ? "" : "none";
   document.getElementById("newItemCategory").style.display = loggedIn ? "" : "none";
   document.getElementById("logoStampSection").style.display = loggedIn ? "block" : "none";
+  document.getElementById("autosaveNote").style.display = loggedIn ? "block" : "none";
   document.getElementById("catalogSaveNote").textContent = loggedIn
     ? "※ 로그인 계정에 저장돼서 다른 기기에서도 그대로 보여요."
     : "※ 새로 등록/수정/삭제한 내용은 이 컴퓨터의 이 브라우저에만 저장됩니다.";

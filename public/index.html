@@ -55,6 +55,7 @@
     cursor: pointer;
   }
   .cloud-badge { font-size: 11.5px; color: var(--accent); background: #eaf5f1; padding: 3px 8px; border-radius: 999px; }
+  .save-status { font-size: 12px; font-weight: 400; color: var(--muted); text-transform: none; letter-spacing: normal; }
 
   .card {
     background: var(--card);
@@ -395,9 +396,10 @@
   </div>
 
   <div class="card">
-    <h2>담은 품목</h2>
+    <h2>담은 품목 <span class="save-status" id="saveStatus"></span></h2>
     <div class="items-list" id="itemsList"></div>
     <button class="add-row-btn" id="addRowBtn">+ 새 품목 직접 넣기</button>
+    <div class="notes cloud-only" id="autosaveNote" style="display:none; margin-top:8px">※ 편집하면 자동으로 저장돼요. 따로 "저장" 버튼을 누르지 않아도 됩니다.</div>
   </div>
 
   <div class="card">
