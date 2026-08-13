@@ -758,6 +758,13 @@ function renderQuoteList() {
     openBtn.onclick = () => openQuoteFromList(q.id);
     actions.appendChild(openBtn);
 
+    const linkBtn = document.createElement("button");
+    linkBtn.className = "quote-open-btn";
+    linkBtn.type = "button";
+    linkBtn.textContent = "링크 복사";
+    linkBtn.onclick = (e) => copyShareLink(q.id, e.target);
+    actions.appendChild(linkBtn);
+
     const dupBtn = document.createElement("button");
     dupBtn.className = "quote-open-btn";
     dupBtn.type = "button";
@@ -969,6 +976,7 @@ document.addEventListener("cloud-changed", () => {
   document.getElementById("logoStampSection").style.display = loggedIn ? "block" : "none";
   document.getElementById("autosaveNote").style.display = loggedIn ? "block" : "none";
   document.getElementById("quoteListSection").style.display = loggedIn ? "block" : "none";
+  document.getElementById("shareLinkSection").style.display = loggedIn ? "flex" : "none";
   document.getElementById("catalogSaveNote").textContent = loggedIn
     ? "※ 로그인 계정에 저장돼서 다른 기기에서도 그대로 보여요."
     : "※ 새로 등록/수정/삭제한 내용은 이 컴퓨터의 이 브라우저에만 저장됩니다.";
@@ -1015,6 +1023,28 @@ document.getElementById("logoUpload").addEventListener("change", (e) => {
 });
 document.getElementById("stampUpload").addEventListener("change", (e) => {
   handleImageUpload("stamp", e.target, "stampPreview");
+});
+
+// ===== 공유 링크 =====
+async function copyShareLink(quoteId, btn) {
+  const url = `${location.origin}/share.html?id=${quoteId}`;
+  const original = btn.textContent;
+  try {
+    await navigator.clipboard.writeText(url);
+    btn.textContent = "복사됨!";
+  } catch {
+    alert("복사에 실패했어요. 이 주소를 직접 복사해주세요:\n" + url);
+    return;
+  }
+  setTimeout(() => { btn.textContent = original; }, 1500);
+}
+
+document.getElementById("copyShareLinkBtn").addEventListener("click", (e) => {
+  if (!state.currentQuoteId) {
+    alert("먼저 품목을 담아서 견적이 저장된 후에 링크를 만들 수 있어요.");
+    return;
+  }
+  copyShareLink(state.currentQuoteId, e.target);
 });
 
 init();

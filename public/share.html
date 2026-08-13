@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>견적서</title>
+<style>
+  :root {
+    --accent: #1d6f5c;
+    --accent-dark: #12463a;
+    --bg: #f4f6f5;
+    --card: #ffffff;
+    --border: #e2e6e4;
+    --text: #1f2a27;
+    --muted: #6b7873;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: "Pretendard", "Malgun Gothic", -apple-system, sans-serif;
+    font-size: 16px;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 20px 14px 60px;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 2px rgba(20, 40, 35, 0.04);
+  }
+  .card h2 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent-dark);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin: 0 0 12px;
+  }
+  .header-card { text-align: center; }
+  .header-card .logo { max-height: 52px; margin-bottom: 10px; }
+  .header-card h1 { font-size: 20px; margin: 0 0 6px; }
+  .meta-line { font-size: 14px; }
+  .meta-line.muted { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+  .info-grid div { display: flex; flex-direction: column; gap: 2px; }
+  .info-grid span { font-size: 12px; color: var(--muted); }
+  .info-grid strong { font-size: 14.5px; font-weight: 600; word-break: break-all; }
+
+  .items-list { display: flex; flex-direction: column; gap: 10px; }
+  .item-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px dashed var(--border);
+  }
+  .item-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .item-row-name { font-size: 15px; font-weight: 700; }
+  .item-row-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .item-row-amount { font-size: 14.5px; font-weight: 700; color: var(--accent-dark); white-space: nowrap; flex-shrink: 0; }
+
+  .totals-card {
+    background: linear-gradient(135deg, var(--accent-dark), var(--accent));
+    color: #fff;
+    border: none;
+    position: relative;
+  }
+  .totals-card .line { display: flex; justify-content: space-between; padding: 5px 0; font-size: 14.5px; color: rgba(255,255,255,0.85); }
+  .totals-card .grand {
+    font-weight: 700;
+    font-size: 21px;
+    color: #fff;
+    border-top: 1px solid rgba(255,255,255,0.25);
+    margin-top: 8px;
+    padding-top: 10px;
+  }
+  .totals-card .stamp { position: absolute; right: 16px; bottom: 14px; max-height: 60px; opacity: 0.92; }
+
+  .notes { font-size: 12px; color: var(--muted); line-height: 1.7; margin-bottom: 20px; }
+
+  .print-btn {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 22px;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    background: var(--accent);
+    color: #fff;
+  }
+
+  @media print {
+    .no-print { display: none !important; }
+    body { padding: 0; background: #fff; max-width: none; }
+    .card { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; }
+  }
+  @page { margin: 14mm 10mm; }
+</style>
+</head>
+<body>
+  <div id="app">불러오는 중…</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="supabaseConfig.js"></script>
+  <script src="share.js"></script>
+</body>
+</html>

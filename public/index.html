@@ -326,6 +326,11 @@
     background: var(--accent);
     color: #fff;
   }
+  .actions button.secondary-btn {
+    background: #fff;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+  }
 
   .notes { font-size: 12px; color: var(--muted); margin-top: 18px; line-height: 1.7; }
 
@@ -500,6 +505,9 @@
 
   <div class="actions">
     <button id="downloadBtn">엑셀 견적서 다운로드</button>
+  </div>
+  <div class="actions cloud-only" id="shareLinkSection" style="display:none">
+    <button id="copyShareLinkBtn" class="secondary-btn">공유 링크 복사 (카카오톡으로 보내기)</button>
   </div>
 
   <div class="notes" id="notesArea"></div>

@@ -8,7 +8,13 @@ const app = express();
 
 const APP_PASSWORD = process.env.APP_PASSWORD || "bathroom1234";
 
+// 카카오톡으로 전달되는 공유 견적서 링크는 사장님 전용 비밀번호를 몰라도 열려야 한다.
+// (카카오톡 인앱 브라우저는 기본인증 자체도 잘 처리 못 하는 문제가 따로 있음 — 그와 별개로
+// 이 경로들은 고객이 여는 화면이라 애초에 비밀번호로 막으면 안 됨)
+const PUBLIC_PATHS = new Set(["/share.html", "/share.js", "/supabaseConfig.js"]);
+
 function basicAuth(req, res, next) {
+  if (PUBLIC_PATHS.has(req.path)) return next();
   const header = req.headers.authorization || "";
   const [scheme, encoded] = header.split(" ");
   if (scheme === "Basic" && encoded) {
