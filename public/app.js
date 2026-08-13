@@ -48,6 +48,8 @@ const state = {
   quoteNumber: null,
   validUntil: null,
   saveStatus: "idle", // idle | saving | saved
+  quoteList: [],
+  quoteSearchText: "",
 };
 
 let itemSeq = 0;
@@ -650,13 +652,146 @@ const scheduleAutosave = debounce(async () => {
 
   const { id, error } = await saveQuoteToCloud(state.currentQuoteId, fields, validItems);
   state.saveStatus = error ? "idle" : "saved";
-  if (!error) state.currentQuoteId = id;
+  if (!error) {
+    state.currentQuoteId = id;
+    refreshQuoteList();
+  }
   renderSaveStatus();
 }, 1200);
 
 ["clientName", "contact", "siteAddress", "consultDate", "workDate"].forEach((id) => {
   document.getElementById(id).addEventListener("input", scheduleAutosave);
 });
+
+// ===== 견적 목록 =====
+function formatShortDateTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${m}/${day} ${hh}:${mm}`;
+}
+
+async function refreshQuoteList() {
+  if (!(window.cloudState && window.cloudState.user)) {
+    state.quoteList = [];
+    renderQuoteList();
+    return;
+  }
+  const { data } = await fetchQuoteList(state.quoteSearchText.trim());
+  state.quoteList = data;
+  renderQuoteList();
+}
+
+function renderQuoteList() {
+  const el = document.getElementById("quoteList");
+  if (!el) return;
+  el.innerHTML = "";
+  if (state.quoteList.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "empty-state";
+    empty.textContent = state.quoteSearchText
+      ? "검색 결과가 없어요."
+      : "아직 저장된 견적이 없어요. 품목을 담으면 자동으로 저장돼요.";
+    el.appendChild(empty);
+    return;
+  }
+  state.quoteList.forEach((q) => {
+    const row = document.createElement("div");
+    row.className = "quote-row";
+
+    const main = document.createElement("div");
+    main.className = "quote-row-main";
+    main.innerHTML = `
+      <div class="quote-row-title">
+        <span class="client">${escapeHtmlApp(q.client_name || "거래처명 없음")}</span>
+        <span class="quote-status-badge">${escapeHtmlApp(q.status || "작성중")}</span>
+      </div>
+      <div class="quote-row-sub">${escapeHtmlApp(q.quote_number || "")} · ${formatShortDateTime(q.updated_at)} 수정</div>
+    `;
+    row.appendChild(main);
+
+    const amount = document.createElement("div");
+    amount.className = "quote-row-amount";
+    amount.textContent = won(q.total) + "원";
+    row.appendChild(amount);
+
+    const openBtn = document.createElement("button");
+    openBtn.className = "quote-open-btn";
+    openBtn.type = "button";
+    openBtn.textContent = state.currentQuoteId === q.id ? "편집중" : "불러오기";
+    openBtn.disabled = state.currentQuoteId === q.id;
+    openBtn.onclick = () => openQuoteFromList(q.id);
+    row.appendChild(openBtn);
+
+    el.appendChild(row);
+  });
+}
+
+function escapeHtmlApp(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function openQuoteFromList(id) {
+  const { quote, items, error } = await fetchQuoteWithItems(id);
+  if (error || !quote) {
+    alert("불러오지 못했어요. 다시 시도해주세요.");
+    return;
+  }
+  state.items = items.map((it) => ({
+    id: nextItemId(),
+    name: it.name,
+    spec: it.spec || "",
+    unit: it.unit || "",
+    qty: clampQty(it.qty),
+    unitPrice: clampPrice(it.unit_price),
+  }));
+  state.currentQuoteId = quote.id;
+  state.quoteNumber = quote.quote_number;
+  state.validUntil = quote.valid_until;
+  state.vatMode = quote.vat_mode || "exclusive";
+  state.vatRatePercent = clampRate(quote.vat_rate ?? 10);
+  state.depositRatePercent = clampRate(quote.deposit_rate ?? 50);
+  state.saveStatus = "saved";
+
+  document.getElementById("clientName").value = quote.client_name || "";
+  document.getElementById("contact").value = quote.contact || "";
+  document.getElementById("siteAddress").value = quote.site_address || "";
+  document.getElementById("consultDate").value = quote.consult_date || "";
+  document.getElementById("workDate").value = quote.work_date || "";
+  document.getElementById("vatRate").value = state.vatRatePercent;
+  document.getElementById("depositRate").value = state.depositRatePercent;
+  document.querySelectorAll(".vat-mode-btn").forEach((b) => b.classList.toggle("active", b.dataset.mode === state.vatMode));
+
+  render();
+  renderSaveStatus();
+  renderQuoteList();
+  document.getElementById("itemsList").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function startNewQuote() {
+  state.items = [];
+  state.currentQuoteId = null;
+  state.quoteNumber = null;
+  state.validUntil = null;
+  state.saveStatus = "idle";
+  ["clientName", "contact", "siteAddress", "consultDate", "workDate"].forEach((id) => {
+    document.getElementById(id).value = "";
+  });
+  render();
+  renderSaveStatus();
+  renderQuoteList();
+}
+
+const scheduleQuoteSearch = debounce(() => {
+  state.quoteSearchText = document.getElementById("quoteSearchInput").value;
+  refreshQuoteList();
+}, 400);
+
+document.getElementById("quoteSearchInput").addEventListener("input", scheduleQuoteSearch);
+document.getElementById("newQuoteBtn").addEventListener("click", startNewQuote);
 
 document.addEventListener("cloud-changed", () => {
   const loggedIn = !!(window.cloudState && window.cloudState.user);
@@ -668,10 +803,12 @@ document.addEventListener("cloud-changed", () => {
     state.saveStatus = "idle";
   }
   renderSaveStatus();
+  refreshQuoteList();
   document.getElementById("newItemCost").style.display = loggedIn ? "" : "none";
   document.getElementById("newItemCategory").style.display = loggedIn ? "" : "none";
   document.getElementById("logoStampSection").style.display = loggedIn ? "block" : "none";
   document.getElementById("autosaveNote").style.display = loggedIn ? "block" : "none";
+  document.getElementById("quoteListSection").style.display = loggedIn ? "block" : "none";
   document.getElementById("catalogSaveNote").textContent = loggedIn
     ? "※ 로그인 계정에 저장돼서 다른 기기에서도 그대로 보여요."
     : "※ 새로 등록/수정/삭제한 내용은 이 컴퓨터의 이 브라우저에만 저장됩니다.";

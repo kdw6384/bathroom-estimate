@@ -214,4 +214,25 @@ async function saveQuoteToCloud(quoteId, fields, items) {
   return { id, error: null };
 }
 
+// ===== 견적 목록 =====
+async function fetchQuoteList(searchText) {
+  let query = supabaseClient
+    .from("quotes")
+    .select("id, quote_number, client_name, status, total, updated_at")
+    .eq("user_id", window.cloudState.user.id)
+    .order("updated_at", { ascending: false })
+    .limit(50);
+  if (searchText) query = query.ilike("client_name", `%${searchText}%`);
+  const { data, error } = await query;
+  return { data: data || [], error };
+}
+
+async function fetchQuoteWithItems(id) {
+  const [quoteRes, itemsRes] = await Promise.all([
+    supabaseClient.from("quotes").select("*").eq("id", id).single(),
+    supabaseClient.from("quote_items").select("*").eq("quote_id", id).order("sort_order", { ascending: true }),
+  ]);
+  return { quote: quoteRes.data, items: itemsRes.data || [], error: quoteRes.error || itemsRes.error };
+}
+
 initCloud();
